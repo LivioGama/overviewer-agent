@@ -1,0 +1,33 @@
+{
+  "name": "@ollama-turbo-agent/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared types and utilities for Ollama Turbo Agent",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./types": "./dist/types/index.js",
+    "./utils": "./dist/utils/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "bun test",
+    "lint": "eslint src/**/*.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.22.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  }
+}
+
+

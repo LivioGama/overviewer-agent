@@ -1,0 +1,44 @@
+{
+  "name": "@ollama-turbo-agent/backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend service for GitHub webhook handling and job orchestration",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "start": "node dist/index.js",
+    "test": "bun test",
+    "lint": "eslint src/**/*.ts",
+    "type-check": "tsc --noEmit",
+    "db:migrate": "drizzle-kit push:pg",
+    "db:seed": "bun src/scripts/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.0",
+    "@fastify/helmet": "^11.0.0",
+    "@fastify/rate-limit": "^9.0.0",
+    "@octokit/webhooks": "^12.0.0",
+    "@octokit/rest": "^20.0.0",
+    "@octokit/auth-app": "^6.0.0",
+    "fastify": "^4.24.0",
+    "drizzle-orm": "^0.29.0",
+    "postgres": "^3.4.0",
+    "redis": "^4.6.0",
+    "jsonwebtoken": "^9.0.0",
+    "crypto": "^1.0.1",
+    "zod": "^3.22.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/uuid": "^9.0.0",
+    "drizzle-kit": "^0.20.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  }
+}
+
+
