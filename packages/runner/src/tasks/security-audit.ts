@@ -82,7 +82,7 @@ export class SecurityAuditTask extends BaseTask {
     return files;
   }
 
-  private shouldSkipDirectory(name: string): boolean {
+  protected shouldSkipDirectory(name: string): boolean {
     return (
       ["node_modules", ".git", "dist", "build"].includes(name) ||
       name.startsWith(".")

@@ -54,6 +54,8 @@ export class RefactorTask extends BaseTask {
       };
     }
 
+    await this.applyQualityChecks();
+
     const commitMessage = `refactor: ${instructions}\n\nRefactored ${totalChanges} files with AI assistance`;
     await this.commitAndPush(job, branchName, commitMessage);
 
@@ -130,7 +132,7 @@ export class RefactorTask extends BaseTask {
     return files.slice(0, 20);
   }
 
-  private shouldSkipDirectory(name: string): boolean {
+  protected shouldSkipDirectory(name: string): boolean {
     const skipDirs = [
       "node_modules",
       ".git",

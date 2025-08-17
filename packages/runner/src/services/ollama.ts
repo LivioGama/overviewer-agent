@@ -17,6 +17,10 @@ export interface OllamaRequest {
   prompt: string;
   system?: string;
   context?: number[];
+  response_format?: {
+    type: "json_object";
+    schema?: object;
+  };
   options?: {
     temperature?: number;
     top_p?: number;
@@ -29,6 +33,41 @@ export interface OllamaRequest {
 export class OllamaService {
   private client: AxiosInstance;
   private baseUrl: string;
+
+  private static readonly CODE_OUTPUT_SCHEMA = {
+    type: "object",
+    properties: {
+      code: {
+        type: "string",
+        description: "The generated or modified code without any markdown formatting, explanations, or comments"
+      }
+    },
+    required: ["code"],
+    additionalProperties: false
+  };
+
+  private static readonly SECURITY_ANALYSIS_SCHEMA = {
+    type: "object",
+    properties: {
+      vulnerabilities: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string" },
+            severity: { type: "string", enum: ["High", "Medium", "Low"] },
+            description: { type: "string" },
+            location: { type: "string" },
+            recommendation: { type: "string" },
+            fixedCode: { type: "string" }
+          },
+          required: ["type", "severity", "description", "recommendation"]
+        }
+      }
+    },
+    required: ["vulnerabilities"],
+    additionalProperties: false
+  };
 
   constructor(baseUrl?: string) {
     this.baseUrl =
@@ -68,35 +107,77 @@ export class OllamaService {
     }
   }
 
+  private async generateStructured<T>(request: OllamaRequest & { response_format: { type: "json_object"; schema: object } }): Promise<T> {
+    try {
+      const response = await this.client.post("/api/generate", {
+        ...request,
+        stream: false,
+      });
+
+      if (response.data?.response) {
+        try {
+          return JSON.parse(response.data.response);
+        } catch (parseError) {
+          console.warn("Failed to parse structured response, trying to extract JSON:", parseError);
+          const jsonMatch = response.data.response.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+          }
+          throw new Error("No valid JSON found in response");
+        }
+      }
+
+      throw new Error("Invalid response from Ollama");
+    } catch (error) {
+      console.error("Ollama structured API error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      throw new Error(`Ollama structured generation failed: ${message}`);
+    }
+  }
+
+  private async generateCodeOnly(prompt: string, system: string, model: string): Promise<string> {
+    const request = {
+      model,
+      prompt: `${prompt}\n\nIMPORTANT: Respond ONLY with a JSON object containing the code. No markdown, no explanations, no additional text.`,
+      system: `${system} You must respond with valid JSON in this exact format: {"code": "your_code_here"}`,
+      response_format: {
+        type: "json_object" as const,
+        schema: OllamaService.CODE_OUTPUT_SCHEMA
+      }
+    };
+
+    const result = await this.generateStructured<{ code: string }>(request);
+    return result.code;
+  }
+
   async generateCodeRefactoring(
     code: string,
     instructions: string,
     model = "gpt-oss:120b",
   ): Promise<string> {
     const prompt = `
-You are an expert software engineer. I need you to refactor the following code based on these instructions: ${instructions}
+You are an expert software engineer. Refactor the following code based on these instructions: ${instructions}
 
 Code to refactor:
 \`\`\`
 ${code}
 \`\`\`
 
-Please provide the refactored code with improvements for:
+Improve the code for:
 - Code quality and readability
 - Performance optimizations
 - Best practices
 - Security considerations
 - Maintainability
 
-Return only the refactored code without explanations.
+Provide ONLY the refactored code without any explanations or markdown formatting.
 `;
 
-    return this.generate({
-      model,
+    return this.generateCodeOnly(
       prompt,
-      system:
-        "You are a helpful code refactoring assistant. Always respond with clean, well-structured code.",
-    });
+      "You are a helpful code refactoring assistant. Return only clean, well-structured code.",
+      model
+    );
   }
 
   async generateTests(
@@ -118,14 +199,14 @@ Include tests for:
 - Input validation
 - Mock dependencies where appropriate
 
-Return only the test code without explanations.
+Provide ONLY the test code without any explanations or markdown formatting.
 `;
 
-    return this.generate({
-      model,
+    return this.generateCodeOnly(
       prompt,
-      system: `You are a test generation expert. Create thorough ${testFramework} tests.`,
-    });
+      `You are a test generation expert. Create thorough ${testFramework} tests.`,
+      model
+    );
   }
 
   async generateDocumentation(
@@ -134,33 +215,32 @@ Return only the test code without explanations.
     model = "gpt-oss:120b",
   ): Promise<string> {
     const prompt = `
-Generate comprehensive documentation for the following ${codeType}:
+Add comprehensive JSDoc documentation to the following ${codeType}:
 
 \`\`\`
 ${code}
 \`\`\`
 
-Include:
+Add JSDoc comments including:
 - Clear description of purpose and functionality
-- Parameter descriptions with types
-- Return value description
-- Usage examples
-- Any important notes or considerations
+- @param descriptions with types for all parameters
+- @returns description for return values
+- @example usage examples where helpful
+- Any important @throws or @deprecated notes
 
-Use appropriate documentation format (JSDoc for JavaScript/TypeScript).
+Return the original code with JSDoc comments added. Do NOT include markdown explanations.
 `;
 
-    return this.generate({
-      model,
+    return this.generateCodeOnly(
       prompt,
-      system:
-        "You are a documentation expert. Create clear, comprehensive documentation.",
-    });
+      "You are a documentation expert. Add proper JSDoc comments to code and return the documented code.",
+      model
+    );
   }
 
   async analyzeSecurity(code: string, model = "gpt-oss:120b"): Promise<string> {
     const prompt = `
-Analyze the following code for security vulnerabilities and provide recommendations:
+Analyze the following code for security vulnerabilities:
 
 \`\`\`
 ${code}
@@ -175,19 +255,30 @@ Look for:
 - Cryptographic issues
 - Dependency vulnerabilities
 
-Provide a structured security analysis with:
-1. Identified vulnerabilities
-2. Risk level (High/Medium/Low)
-3. Specific recommendations for fixes
-4. Improved code examples where applicable
+Provide a structured analysis in JSON format with vulnerabilities array.
 `;
 
-    return this.generate({
-      model,
-      prompt,
-      system:
-        "You are a security expert. Provide thorough security analysis and actionable recommendations.",
-    });
+    try {
+      const request = {
+        model,
+        prompt: `${prompt}\n\nIMPORTANT: Respond ONLY with a JSON object containing the analysis. No markdown, no explanations.`,
+        system: "You are a security expert. Provide thorough security analysis in JSON format.",
+        response_format: {
+          type: "json_object" as const,
+          schema: OllamaService.SECURITY_ANALYSIS_SCHEMA
+        }
+      };
+
+      const result = await this.generateStructured<{ vulnerabilities: any[] }>(request);
+      return JSON.stringify(result, null, 2);
+    } catch (error) {
+      console.warn("Structured security analysis failed, falling back to regular generation:", error);
+      return this.generate({
+        model,
+        prompt,
+        system: "You are a security expert. Provide thorough security analysis and actionable recommendations.",
+      });
+    }
   }
 
   async fixBugs(
@@ -205,21 +296,20 @@ Code with bug:
 ${code}
 \`\`\`
 
-Please:
-1. Identify the root cause of the bug
-2. Provide the corrected code
-3. Ensure the fix doesn't introduce new issues
-4. Add appropriate error handling if needed
+Requirements:
+1. Identify and fix the root cause of the bug
+2. Ensure the fix doesn't introduce new issues
+3. Add appropriate error handling if needed
+4. Maintain existing functionality
 
-Return only the fixed code without explanations.
+Provide ONLY the fixed code without any explanations or markdown formatting.
 `;
 
-    return this.generate({
-      model,
+    return this.generateCodeOnly(
       prompt,
-      system:
-        "You are a debugging expert. Fix bugs while maintaining code quality and functionality.",
-    });
+      "You are a debugging expert. Fix bugs while maintaining code quality and functionality.",
+      model
+    );
   }
 
   async improveCodeQuality(
@@ -242,15 +332,14 @@ Focus on:
 - Type safety (if applicable)
 - Removing code smells
 
-Return only the improved code without explanations.
+Provide ONLY the improved code without any explanations or markdown formatting.
 `;
 
-    return this.generate({
-      model,
+    return this.generateCodeOnly(
       prompt,
-      system:
-        "You are a code quality expert. Improve code while maintaining functionality.",
-    });
+      "You are a code quality expert. Improve code while maintaining functionality.",
+      model
+    );
   }
 
   async listModels(): Promise<string[]> {

@@ -24,7 +24,6 @@ export const TaskType = z.enum([
   "test_generation",
   "documentation",
   "dependency_update",
-  "code_quality",
   "bug_fix",
   "security_audit",
 ]);

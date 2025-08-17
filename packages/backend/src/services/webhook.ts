@@ -1,12 +1,12 @@
 import {
-  type CommentEvent,
-  isBot,
-  type IssueEvent,
-  parseCommand,
-  type PullRequestEvent,
-  type PushEvent,
-  type TaskTypeType,
-  validateWebhookSignature,
+    type CommentEvent,
+    isBot,
+    type IssueEvent,
+    parseCommand,
+    type PullRequestEvent,
+    type PushEvent,
+    type TaskTypeType,
+    validateWebhookSignature,
 } from "@ollama-turbo-agent/shared";
 import { env } from "../config/env.js";
 import { issueAnalyzerService } from "./issue-analyzer.js";
@@ -133,7 +133,7 @@ export class WebhookService {
       refName: payload.pull_request.head.ref,
       triggerType: "pr_opened",
       triggerPayload: payload,
-      taskType: "code_quality",
+      taskType: "refactor",
       taskParams: {
         prNumber: payload.pull_request.number,
         baseBranch: payload.pull_request.base.ref,

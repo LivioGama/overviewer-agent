@@ -1,4 +1,4 @@
-export const INITIAL_COMMENT_TEMPLATE = `Hi! I'm here to help out the maintainers and am going to see if I can fix this issue. I'll investigate {{issue_summary}}. Thanks for reporting this!
+export const INITIAL_COMMENT_TEMPLATE = `Hi! I'm here to help out the maintainers and am going to see if I can fix this issue. I'll investigate \`{{issue_summary}}\`. Thanks for reporting this!
 
 🔍 **Analysis in progress...**
 - Issue type: {{issue_type}}
@@ -18,7 +18,7 @@ export const SUCCESS_COMMENT_TEMPLATE = `I've successfully implemented a fix for
 
 {{problem_summary}}
 
-Solution implemented in PR #{{pr_number}}: {{pr_url}}
+Solution implemented in PR #{{pr_number}}
 
 **Changes made:**
 {{changes_summary}}

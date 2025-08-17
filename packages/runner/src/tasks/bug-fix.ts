@@ -50,8 +50,10 @@ export class BugFixTask extends BaseTask {
     await this.updateIssueProgress(
       job,
       "creating_pr",
-      "Creating pull request with the proposed changes...",
+      "Applying quality checks and creating pull request...",
     );
+
+    await this.applyQualityChecks();
 
     const commitMessage = `fix: ${job.taskParams.issueTitle || errorDescription}\n\nFixed bugs in ${fixedFiles.length} files with AI assistance\n\nFixes #${job.taskParams.issueNumber || ""}`;
     await this.commitAndPush(job, branchName, commitMessage);
@@ -123,7 +125,7 @@ export class BugFixTask extends BaseTask {
     return files;
   }
 
-  private shouldSkipDirectory(name: string): boolean {
+  protected shouldSkipDirectory(name: string): boolean {
     return (
       ["node_modules", ".git", "dist", "build"].includes(name) ||
       name.startsWith(".")
@@ -212,15 +214,10 @@ Fixes #${issueNumber}`;
   }
 
   private extractProblemDescription(issueBody: string): string {
-    // Extract first few sentences or first paragraph as problem description
-    const lines = issueBody
-      .split("\n")
-      .filter((line) => line.trim().length > 0);
-    if (lines.length === 0) return "No description provided";
+    if (!issueBody || issueBody.trim().length === 0) {
+      return "No description provided";
+    }
 
-    const firstParagraph = lines[0];
-    return firstParagraph.length > 200
-      ? firstParagraph.substring(0, 200) + "..."
-      : firstParagraph;
+    return issueBody.trim();
   }
 }

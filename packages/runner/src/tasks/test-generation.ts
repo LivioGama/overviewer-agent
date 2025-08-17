@@ -90,7 +90,7 @@ export class TestGenerationTask extends BaseTask {
     return files;
   }
 
-  private shouldSkipDirectory(name: string): boolean {
+  protected shouldSkipDirectory(name: string): boolean {
     const skipDirs = [
       "node_modules",
       ".git",

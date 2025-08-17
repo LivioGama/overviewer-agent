@@ -3,9 +3,9 @@ enabled: true
 
 automation:
   triggers:
-    - comment      # Manual commands
+#    - comment      # Manual commands
     - issue_opened # 🆕 Automatic issue processing
-    - pr_opened    # Automatic PR review
+#    - pr_opened    # Automatic PR review
 
   issue_processing:
     enabled: true

@@ -38,13 +38,7 @@ const features = [
     icon: "🐛",
     command: "/fix",
   },
-  {
-    title: "Code Quality",
-    description:
-      "Improve code quality with best practices, performance optimizations, and clean code principles.",
-    icon: "✨",
-    command: "/quality",
-  },
+
 ];
 
 export const WelcomeScreen = () => {

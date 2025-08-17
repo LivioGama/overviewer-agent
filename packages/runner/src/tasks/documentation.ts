@@ -31,6 +31,8 @@ export class DocumentationTask extends BaseTask {
       };
     }
 
+    await this.applyQualityChecks();
+
     const commitMessage = `docs: Add comprehensive documentation\n\nAdded documentation to ${documentedFiles.length} files with AI assistance`;
     await this.commitAndPush(job, branchName, commitMessage);
 
@@ -84,7 +86,7 @@ export class DocumentationTask extends BaseTask {
     return files;
   }
 
-  private shouldSkipDirectory(name: string): boolean {
+  protected shouldSkipDirectory(name: string): boolean {
     return (
       ["node_modules", ".git", "dist", "build"].includes(name) ||
       name.startsWith(".")

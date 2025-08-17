@@ -3,7 +3,7 @@ import type { Job } from "@ollama-turbo-agent/shared";
 import type { OllamaService } from "../services/ollama.js";
 import { BaseTask, TaskResult } from "./base-task.js";
 import { BugFixTask } from "./bug-fix.js";
-import { CodeQualityTask } from "./code-quality.js";
+
 import { DocumentationTask } from "./documentation.js";
 import { RefactorTask } from "./refactor.js";
 import { SecurityAuditTask } from "./security-audit.js";
@@ -42,11 +42,7 @@ export class TaskExecutor {
       (ollama, octokit, workspace) =>
         new BugFixTask(ollama, octokit, workspace),
     );
-    this.tasks.set(
-      "code_quality",
-      (ollama, octokit, workspace) =>
-        new CodeQualityTask(ollama, octokit, workspace),
-    );
+
   }
 
   async executeTask(

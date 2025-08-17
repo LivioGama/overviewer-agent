@@ -1,6 +1,8 @@
 import { Octokit } from "@octokit/rest";
 import type { Job } from "@ollama-turbo-agent/shared";
 import { generateBranchName } from "@ollama-turbo-agent/shared";
+import { promises as fs } from "fs";
+import path from "path";
 import { simpleGit } from "simple-git";
 import type { OllamaService } from "../services/ollama.js";
 
@@ -48,6 +50,135 @@ export abstract class BaseTask {
     await git.add(".");
     await git.commit(message);
     await git.push("origin", branchName);
+  }
+
+  protected async applyQualityChecks(): Promise<void> {
+    const filesToCheck = await this.findFilesToImprove();
+
+    for (const filePath of filesToCheck.slice(0, 5)) {
+      try {
+        await this.removeCommentsFromFile(filePath);
+        await this.improveCodeQualityInline(filePath);
+      } catch (error) {
+        console.warn(`Failed to apply quality checks to ${filePath}:`, error);
+      }
+    }
+  }
+
+  private async findFilesToImprove(): Promise<string[]> {
+    const extensions = [".ts", ".js", ".tsx", ".jsx"];
+    const files: string[] = [];
+
+    const scanDirectory = async (dir: string): Promise<void> => {
+      try {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+
+          if (entry.isDirectory() && !this.shouldSkipDirectory(entry.name)) {
+            await scanDirectory(fullPath);
+          } else if (
+            entry.isFile() &&
+            extensions.some((ext) => entry.name.endsWith(ext))
+          ) {
+            files.push(fullPath);
+          }
+        }
+      } catch (error) {
+        console.warn(`Failed to scan directory ${dir}:`, error);
+      }
+    };
+
+    await scanDirectory(this.workspace);
+    return files;
+  }
+
+  protected shouldSkipDirectory(name: string): boolean {
+    return (
+      [
+        "node_modules",
+        "dist",
+        "build",
+        ".git",
+        "coverage",
+        ".next",
+        "__pycache__",
+      ].includes(name) || name.startsWith(".")
+    );
+  }
+
+  private async removeCommentsFromFile(filePath: string): Promise<void> {
+    try {
+      const content = await fs.readFile(filePath, "utf-8");
+      const cleanedContent = this.removeCodeComments(content, filePath);
+
+      if (cleanedContent !== content) {
+        await fs.writeFile(filePath, cleanedContent, "utf-8");
+      }
+    } catch (error) {
+      console.warn(`Failed to remove comments from ${filePath}:`, error);
+    }
+  }
+
+  private removeCodeComments(content: string, filePath: string): string {
+    const isTypeScript = filePath.endsWith(".ts") || filePath.endsWith(".tsx");
+    const isJavaScript = filePath.endsWith(".js") || filePath.endsWith(".jsx");
+
+    if (!isTypeScript && !isJavaScript) {
+      return content;
+    }
+
+    return content
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/(?!\s*@ts-ignore).*$/gm, "")
+      .replace(/\n\s*\n\s*\n/g, "\n\n")
+      .trim();
+  }
+
+  private async improveCodeQualityInline(filePath: string): Promise<void> {
+    try {
+      const content = await fs.readFile(filePath, "utf-8");
+
+      if (content.length < 100 || content.length > 10000) {
+        return;
+      }
+
+      const hasQualityIssues = !this.hasGoodQuality(content);
+      if (!hasQualityIssues) {
+        return;
+      }
+
+      const improvedContent = await this.ollama.improveCodeQuality(
+        content,
+        "gpt-oss:120b",
+      );
+
+      if (this.isImprovement(content, improvedContent)) {
+        await fs.writeFile(filePath, improvedContent, "utf-8");
+      }
+    } catch (error) {
+      console.warn(`Failed to improve code quality for ${filePath}:`, error);
+    }
+  }
+
+  private hasGoodQuality(content: string): boolean {
+    const qualityIndicators = [
+      /\/\*\*[\s\S]*?\*\//g,
+      /interface\s+\w+/g,
+      /type\s+\w+\s*=/g,
+      /const\s+\w+\s*[:=]/g,
+    ];
+
+    return qualityIndicators.some((pattern) => pattern.test(content));
+  }
+
+  private isImprovement(original: string, improved: string): boolean {
+    return (
+      improved.length > original.length * 0.8 &&
+      improved.length < original.length * 1.5 &&
+      improved.trim().length > 0
+    );
   }
 
   protected async createPullRequest(
@@ -140,7 +271,7 @@ I'll keep you updated on my progress!`;
 
 ${summary}
 
-Solution implemented in PR #${prNumber}: ${prUrl}
+Solution implemented in PR #${prNumber}
 
 **Changes made:**
 - Analyzed the issue and identified the root cause
@@ -161,7 +292,6 @@ All CI checks have passed ✅ and the fix is ready for review!`;
       test_generation: "Test Generation",
       documentation: "Documentation Update",
       security_audit: "Security Audit",
-      code_quality: "Code Quality Improvement",
     };
 
     return taskTypeMap[taskType] || taskType;

@@ -163,7 +163,7 @@ export class IssueAnalyzerService {
       return "security_audit";
     }
     if (this.containsKeywords(combined, qualityKeywords)) {
-      return "code_quality";
+      return "refactor";
     }
     if (this.containsKeywords(combined, refactorKeywords)) {
       return "refactor";

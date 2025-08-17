@@ -206,12 +206,11 @@ bun run dev
 
 Comment on GitHub issues or pull requests with these commands:
 
-- `/refactor [instructions]` - Refactor code with AI assistance
+- `/refactor [instructions]` - Refactor code with AI assistance (includes quality improvements)
 - `/test` - Generate comprehensive unit tests
 - `/docs` - Add or update documentation
 - `/security` - Run security audit and fixes
-- `/fix [description]` - Fix bugs with AI assistance  
-- `/quality` - Improve overall code quality
+- `/fix [description]` - Fix bugs with AI assistance (includes quality improvements)
 
 ### Repository Configuration
 
@@ -430,3 +429,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ by the Ollama Turbo Agent team**
+
+https://cookbook.openai.com/examples/structured_outputs_multi_agent
