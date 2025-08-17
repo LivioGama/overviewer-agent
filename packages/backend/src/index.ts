@@ -30,12 +30,13 @@ enum TermSignal {
   SIGTERM = 'SIGTERM',
 }
 
-type HealthResponse = {
+/** Health‑check response payload */
+interface HealthResponse {
   status: 'healthy';
   timestamp: string;
   version: string;
   environment: string;
-};
+}
 
 /*─────────────────────────────────────────────────────────────────────────────
  * Logger configuration
@@ -61,7 +62,7 @@ function buildLoggerOptions(): FastifyLoggerOptions {
 }
 
 /*─────────────────────────────────────────────────────────────────────────────
- * Fastify instance
+ * Fastify instance factory
  *─────────────────────────────────────────────────────────────────────────────*/
 
 function createApp(): FastifyInstance {
@@ -72,7 +73,7 @@ function createApp(): FastifyInstance {
  * Plugins
  *─────────────────────────────────────────────────────────────────────────────*/
 
-const plugins: FastifyPluginAsync = async (app) => {
+const registerPlugins: FastifyPluginAsync = async (app) => {
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: env.NODE_ENV === 'development' });
   await app.register(rateLimit, {
@@ -98,7 +99,7 @@ const healthHandler = (
   reply.code(200).send(payload);
 };
 
-const routes: FastifyPluginAsync = async (app) => {
+const registerRoutes: FastifyPluginAsync = async (app) => {
   await app.register(authRoutes);
   await app.register(webhookRoutes);
   await app.register(jobRoutes);
@@ -114,30 +115,49 @@ function setErrorHandler(app: FastifyInstance): void {
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
+      // Validation errors raised by Fastify schema validation
       if (error.validation) {
-        void reply.code(400).send({
-          error: 'Validation error',
-          details: error.validation,
-        });
+        void reply
+          .code(400)
+          .send({ error: 'Validation error', details: error.validation });
         return;
       }
 
+      // Fastify‑generated HTTP errors
       if (error.statusCode && error.message) {
         void reply.code(error.statusCode).send({ error: error.message });
         return;
       }
 
+      // Fallback – unexpected internal error
       void reply.code(500).send({ error: 'Internal server error' });
     },
   );
 }
 
 /*─────────────────────────────────────────────────────────────────────────────
- * Graceful shutdown
+ * Graceful shutdown helpers
  *─────────────────────────────────────────────────────────────────────────────*/
 
+async function closeQueue(app: FastifyInstance): Promise<void> {
+  try {
+    await queueService.disconnect();
+  } catch (e) {
+    app.log.error({ err: e }, 'Failed to disconnect queue service');
+  }
+}
+
+async function closeServer(app: FastifyInstance): Promise<void> {
+  try {
+    await app.close();
+  } catch (e) {
+    app.log.error({ err: e }, 'Failed to close Fastify server');
+  }
+}
+
+/** Run all shutdown tasks, logging any failures. */
 async function shutdown(app: FastifyInstance): Promise<void> {
-  const tasks = [queueService.disconnect(), app.close()];
+  const tasks = [closeQueue(app), closeServer(app)];
   const results = await Promise.allSettled(tasks);
 
   for (const result of results) {
@@ -153,7 +173,7 @@ async function shutdown(app: FastifyInstance): Promise<void> {
 
 function bindSignalHandlers(app: FastifyInstance): void {
   const handle = async (signal: TermSignal) => {
-    app.log.info(`Received ${signal} – starting graceful shutdown`);
+    app.log.info(`Received ${signal} – initiating graceful shutdown`);
     await shutdown(app);
     process.exit(0);
   };
@@ -186,10 +206,11 @@ async function bootstrap(): Promise<void> {
   const app = createApp();
 
   try {
-    await app.register(plugins);
-    await app.register(routes);
+    await app.register(registerPlugins);
+    await app.register(registerRoutes);
     setErrorHandler(app);
     bindProcessErrorHandlers(app);
+
     await queueService.createConsumerGroup();
 
     await app.ready();
@@ -205,7 +226,7 @@ async function bootstrap(): Promise<void> {
 
     bindSignalHandlers(app);
   } catch (error) {
-    // Fastify logger might not be initialized – fallback to console.
+    // Logger may not be ready – fallback to console.
     const logger = (app?.log ?? console) as {
       error: (obj: unknown, msg?: string) => void;
     };
