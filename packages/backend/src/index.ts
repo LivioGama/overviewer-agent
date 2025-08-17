@@ -25,10 +25,11 @@ import { queueService } from './apps/backend/services/queue.js';
  * Types & Constants
  *─────────────────────────────────────────────────────────────────────────────*/
 
-enum Signal {
+enum TermSignal {
   SIGINT = 'SIGINT',
   SIGTERM = 'SIGTERM',
 }
+
 type HealthResponse = {
   status: 'healthy';
   timestamp: string;
@@ -40,7 +41,7 @@ type HealthResponse = {
  * Logger configuration
  *─────────────────────────────────────────────────────────────────────────────*/
 
-function createLoggerConfig(): FastifyLoggerOptions {
+function buildLoggerOptions(): FastifyLoggerOptions {
   const base = { level: env.LOG_LEVEL } as const;
 
   if (env.NODE_ENV === 'development') {
@@ -60,18 +61,18 @@ function createLoggerConfig(): FastifyLoggerOptions {
 }
 
 /*─────────────────────────────────────────────────────────────────────────────
- * Fastify instance factory
+ * Fastify instance
  *─────────────────────────────────────────────────────────────────────────────*/
 
-function makeApp(): FastifyInstance {
-  return Fastify({ logger: createLoggerConfig() });
+function createApp(): FastifyInstance {
+  return Fastify({ logger: buildLoggerOptions() });
 }
 
 /*─────────────────────────────────────────────────────────────────────────────
  * Plugins
  *─────────────────────────────────────────────────────────────────────────────*/
 
-const registerPlugins: FastifyPluginAsync = async (app) => {
+const plugins: FastifyPluginAsync = async (app) => {
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: env.NODE_ENV === 'development' });
   await app.register(rateLimit, {
@@ -97,7 +98,7 @@ const healthHandler = (
   reply.code(200).send(payload);
 };
 
-const registerRoutes: FastifyPluginAsync = async (app) => {
+const routes: FastifyPluginAsync = async (app) => {
   await app.register(authRoutes);
   await app.register(webhookRoutes);
   await app.register(jobRoutes);
@@ -136,19 +137,12 @@ function setErrorHandler(app: FastifyInstance): void {
  *─────────────────────────────────────────────────────────────────────────────*/
 
 async function shutdown(app: FastifyInstance): Promise<void> {
-  const tasks = [
-    queueService.disconnect(),
-    app.close(),
-  ];
-
+  const tasks = [queueService.disconnect(), app.close()];
   const results = await Promise.allSettled(tasks);
 
   for (const result of results) {
     if (result.status === 'rejected') {
-      app.log.error(
-        { err: result.reason },
-        'Shutdown task failed',
-      );
+      app.log.error({ err: result.reason }, 'Shutdown task failed');
     }
   }
 }
@@ -157,15 +151,15 @@ async function shutdown(app: FastifyInstance): Promise<void> {
  * Signal handling
  *─────────────────────────────────────────────────────────────────────────────*/
 
-function handleSignals(app: FastifyInstance): void {
-  const handler = async (signal: Signal) => {
+function bindSignalHandlers(app: FastifyInstance): void {
+  const handle = async (signal: TermSignal) => {
     app.log.info(`Received ${signal} – starting graceful shutdown`);
     await shutdown(app);
     process.exit(0);
   };
 
-  for (const sig of Object.values(Signal)) {
-    process.once(sig, () => void handler(sig));
+  for (const sig of Object.values(TermSignal)) {
+    process.once(sig, () => void handle(sig));
   }
 }
 
@@ -173,7 +167,7 @@ function handleSignals(app: FastifyInstance): void {
  * Process‑wide error handling
  *─────────────────────────────────────────────────────────────────────────────*/
 
-function handleProcessErrors(app: FastifyInstance): void {
+function bindProcessErrorHandlers(app: FastifyInstance): void {
   process.on('unhandledRejection', (reason) => {
     app.log.error({ err: reason }, 'Unhandled promise rejection');
   });
@@ -189,13 +183,13 @@ function handleProcessErrors(app: FastifyInstance): void {
  *─────────────────────────────────────────────────────────────────────────────*/
 
 async function bootstrap(): Promise<void> {
-  const app = makeApp();
+  const app = createApp();
 
   try {
-    await app.register(registerPlugins);
-    await app.register(registerRoutes);
+    await app.register(plugins);
+    await app.register(routes);
     setErrorHandler(app);
-    handleProcessErrors(app);
+    bindProcessErrorHandlers(app);
     await queueService.createConsumerGroup();
 
     await app.ready();
@@ -209,13 +203,13 @@ async function bootstrap(): Promise<void> {
     app.log.info(`Environment: ${env.NODE_ENV}`);
     app.log.info(`Log level: ${env.LOG_LEVEL}`);
 
-    handleSignals(app);
-  } catch (err) {
-    // Fastify logger may not be available yet – fallback to console.
+    bindSignalHandlers(app);
+  } catch (error) {
+    // Fastify logger might not be initialized – fallback to console.
     const logger = (app?.log ?? console) as {
       error: (obj: unknown, msg?: string) => void;
     };
-    logger.error({ err }, 'Failed to start server');
+    logger.error({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 }
@@ -224,7 +218,5 @@ async function bootstrap(): Promise<void> {
  * Run
  *─────────────────────────────────────────────────────────────────────────────*/
 
-void (async () => {
-  await bootstrap();
-})();
+await bootstrap();
 ```
