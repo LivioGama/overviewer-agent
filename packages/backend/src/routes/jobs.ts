@@ -1,6 +1,11 @@
 ```ts
 import { and, desc, eq, gt, count as sqlCount } from "drizzle-orm";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  RouteHandlerMethod,
+} from "fastify";
 
 import { db } from "../database/connection.js";
 import { jobs } from "../database/schema.js";
@@ -8,7 +13,7 @@ import { authenticateInstallation } from "../middleware/auth.js";
 import { queueService } from "../services/queue.js";
 
 /* -------------------------------------------------------------------------- */
-/*                              Helper Types                                 */
+/*                               Types & Enums                               */
 /* -------------------------------------------------------------------------- */
 
 type InstallationParams = { installationId: string };
@@ -22,47 +27,79 @@ type JobsQuery = {
   repoName?: string;
 };
 
+enum JobStatus {
+  Queued = "queued",
+  InProgress = "in_progress",
+  Completed = "completed",
+  Failed = "failed",
+  Cancelled = "cancelled",
+}
+
 /* -------------------------------------------------------------------------- */
-/*                              Helper Functions                               */
+/*                               Helper Utils                                 */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Parses a numeric string param to an integer.
+ * Safely parses a numeric string/number to integer.
  * Returns `null` if parsing fails.
  */
-function parseIntParam(value: string): number | null {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? null : parsed;
+function toInt(value: string | number): number | null {
+  const num = typeof value === "number" ? value : Number.parseInt(value, 10);
+  return Number.isNaN(num) ? null : num;
 }
 
 /**
- * Common logic for fetching a single job belonging to an installation.
+ * Returns a reusable Fastify `preHandler` that validates and converts
+ * `installationId` param to a number, exposing it as `request.installationId`.
  */
-async function findJob(
+function validateInstallationId<
+  Params extends InstallationParams,
+  Query = unknown,
+  Body = unknown,
+  Headers = unknown,
+>() {
+  return async (
+    request: FastifyRequest<{
+      Params: Params;
+      Querystring: Query;
+      Body: Body;
+      Headers: Headers;
+    }>,
+    reply: FastifyReply,
+  ) => {
+    const id = toInt(request.params.installationId);
+    if (id === null) {
+      reply.code(400).send({ error: "Invalid installationId" });
+      return;
+    }
+    // @ts-expect-error – augment request for downstream handlers
+    request.installationId = id;
+  };
+}
+
+/**
+ * Retrieves a job belonging to the validated installation.
+ */
+async function getJob(
   installationId: number,
   jobId: string,
-): Promise<typeof jobs.$inferSelect | null> {
+) {
   const rows = await db
     .select()
     .from(jobs)
-    .where(
-      and(eq(jobs.id, jobId), eq(jobs.installationId, installationId)),
-    )
+    .where(and(eq(jobs.id, jobId), eq(jobs.installationId, installationId)))
     .limit(1);
-
   return rows[0] ?? null;
 }
 
 /**
- * Builds a WHERE clause array based on optional query parameters.
+ * Constructs filters for job queries based on optional parameters.
  */
-function buildJobFilters(
+function jobFilters(
   installationId: number,
   query: JobsQuery,
-): Array<ReturnType<typeof eq>> {
-  const filters: Array<ReturnType<typeof eq>> = [
-    eq(jobs.installationId, installationId),
-  ];
+) {
+  const filters = [eq(jobs.installationId, installationId)] as const;
 
   if (query.status) filters.push(eq(jobs.status, query.status));
   if (query.repoOwner) filters.push(eq(jobs.repoOwner, query.repoOwner));
@@ -72,223 +109,206 @@ function buildJobFilters(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                              Route Handlers                                 */
+/*                               Route Handlers                                */
 /* -------------------------------------------------------------------------- */
 
 export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
-  /* ------------------------------- GET LIST ------------------------------- */
-  fastify.get(
-    "/installations/:installationId/jobs",
-    {
-      preHandler: [authenticateInstallation],
-      schema: {
-        params: {
-          type: "object",
-          properties: { installationId: { type: "string" } },
-          required: ["installationId"],
-        },
-        querystring: {
-          type: "object",
-          properties: {
-            limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
-            offset: { type: "integer", minimum: 0, default: 0 },
-            status: {
-              type: "string",
-              enum: ["queued", "in_progress", "completed", "failed", "cancelled"],
-            },
-            repoOwner: { type: "string" },
-            repoName: { type: "string" },
+  const basePath = "/installations/:installationId";
+
+  /* ------------------------------- LIST ----------------------------------- */
+  fastify.get<{
+    Params: InstallationParams;
+    Querystring: JobsQuery;
+  }>(`${basePath}/jobs`, {
+    preHandler: [authenticateInstallation, validateInstallationId()],
+    schema: {
+      params: {
+        type: "object",
+        properties: { installationId: { type: "string" } },
+        required: ["installationId"],
+      },
+      querystring: {
+        type: "object",
+        properties: {
+          limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+          offset: { type: "integer", minimum: 0, default: 0 },
+          status: {
+            type: "string",
+            enum: Object.values(JobStatus),
           },
+          repoOwner: { type: "string" },
+          repoName: { type: "string" },
         },
       },
     },
-    async (request: FastifyRequest<{ Params: InstallationParams; Querystring: JobsQuery }>, reply: FastifyReply) => {
-      const installationIdNum = parseIntParam(request.params.installationId);
-      if (installationIdNum === null) {
-        return reply.code(400).send({ error: "Invalid installationId" });
-      }
+  } as RouteHandlerMethod, async (req, reply) => {
+    const installationId = (req as any).installationId as number;
+    const { limit = 20, offset = 0 } = req.query;
 
-      const { limit = 20, offset = 0 } = request.query;
+    const filters = jobFilters(installationId, req.query);
 
-      const rows = await db
+    const [jobsRows, [{ total }]] = await Promise.all([
+      db
         .select()
         .from(jobs)
-        .where(and(...buildJobFilters(installationIdNum, request.query)))
+        .where(and(...filters))
         .orderBy(desc(jobs.createdAt))
         .limit(limit)
-        .offset(offset);
+        .offset(offset),
 
-      // Optional: total count for pagination (separate query)
-      const [{ total }] = await db
+      db
         .select({ total: sqlCount() })
         .from(jobs)
-        .where(and(...buildJobFilters(installationIdNum, request.query)));
+        .where(and(...filters)),
+    ]);
 
-      return reply.send({
-        jobs: rows,
-        pagination: { limit, offset, total },
-      });
-    },
-  );
+    reply.send({ jobs: jobsRows, pagination: { limit, offset, total } });
+  });
 
-  /* -------------------------------- GET ONE ------------------------------- */
-  fastify.get(
-    "/installations/:installationId/jobs/:jobId",
-    {
-      preHandler: [authenticateInstallation],
-      schema: {
-        params: {
-          type: "object",
-          properties: {
-            installationId: { type: "string" },
-            jobId: { type: "string" },
-          },
-          required: ["installationId", "jobId"],
+  /* -------------------------------- GET ONE ------------------------------ */
+  fastify.get<{
+    Params: JobParams;
+  }>(`${basePath}/jobs/:jobId`, {
+    preHandler: [authenticateInstallation, validateInstallationId()],
+    schema: {
+      params: {
+        type: "object",
+        properties: {
+          installationId: { type: "string" },
+          jobId: { type: "string" },
         },
+        required: ["installationId", "jobId"],
       },
     },
-    async (request: FastifyRequest<{ Params: JobParams }>, reply: FastifyReply) => {
-      const { installationId, jobId } = request.params;
-      const installationIdNum = parseIntParam(installationId);
-      if (installationIdNum === null) {
-        return reply.code(400).send({ error: "Invalid installationId" });
-      }
+  } as RouteHandlerMethod, async (req, reply) => {
+    const installationId = (req as any).installationId as number;
+    const { jobId } = req.params;
 
-      const job = await findJob(installationIdNum, jobId);
-      if (!job) {
-        return reply.code(404).send({ error: "Job not found" });
-      }
+    const job = await getJob(installationId, jobId);
+    if (!job) {
+      reply.code(404).send({ error: "Job not found" });
+      return;
+    }
 
-      return reply.send({ job });
-    },
-  );
+    reply.send({ job });
+  });
 
-  /* ------------------------------- CANCEL JOB ---------------------------- */
-  fastify.post(
-    "/installations/:installationId/jobs/:jobId/cancel",
-    {
-      preHandler: [authenticateInstallation],
-      schema: {
-        params: {
-          type: "object",
-          properties: {
-            installationId: { type: "string" },
-            jobId: { type: "string" },
-          },
-          required: ["installationId", "jobId"],
+  /* ------------------------------- CANCEL -------------------------------- */
+  fastify.post<{
+    Params: JobParams;
+  }>(`${basePath}/jobs/:jobId/cancel`, {
+    preHandler: [authenticateInstallation, validateInstallationId()],
+    schema: {
+      params: {
+        type: "object",
+        properties: {
+          installationId: { type: "string" },
+          jobId: { type: "string" },
         },
+        required: ["installationId", "jobId"],
       },
     },
-    async (request: FastifyRequest<{ Params: JobParams }>, reply: FastifyReply) => {
-      const { installationId, jobId } = request.params;
-      const installationIdNum = parseIntParam(installationId);
-      if (installationIdNum === null) {
-        return reply.code(400).send({ error: "Invalid installationId" });
-      }
+  } as RouteHandlerMethod, async (req, reply) => {
+    const installationId = (req as any).installationId as number;
+    const { jobId } = req.params;
 
-      const job = await findJob(installationIdNum, jobId);
-      if (!job) {
-        return reply.code(404).send({ error: "Job not found" });
-      }
+    const job = await getJob(installationId, jobId);
+    if (!job) {
+      reply.code(404).send({ error: "Job not found" });
+      return;
+    }
 
-      if (!["queued", "in_progress"].includes(job.status)) {
-        return reply.code(400).send({ error: "Job cannot be cancelled" });
-      }
+    if (![JobStatus.Queued, JobStatus.InProgress].includes(job.status as JobStatus)) {
+      reply.code(400).send({ error: "Job cannot be cancelled" });
+      return;
+    }
 
-      await Promise.all([
-        queueService.updateJobStatus(jobId, "cancelled"),
-        db
-          .update(jobs)
-          .set({ status: "cancelled", completedAt: new Date() })
-          .where(eq(jobs.id, jobId)),
-      ]);
+    await Promise.all([
+      queueService.updateJobStatus(jobId, JobStatus.Cancelled),
+      db
+        .update(jobs)
+        .set({ status: JobStatus.Cancelled, completedAt: new Date() })
+        .where(eq(jobs.id, jobId)),
+    ]);
 
-      return reply.send({ success: true, message: "Job cancelled" });
-    },
-  );
+    reply.send({ success: true, message: "Job cancelled" });
+  });
 
   /* --------------------------------- RETRY -------------------------------- */
-  fastify.post(
-    "/installations/:installationId/jobs/:jobId/retry",
-    {
-      preHandler: [authenticateInstallation],
-      schema: {
-        params: {
-          type: "object",
-          properties: {
-            installationId: { type: "string" },
-            jobId: { type: "string" },
-          },
-          required: ["installationId", "jobId"],
+  fastify.post<{
+    Params: JobParams;
+  }>(`${basePath}/jobs/:jobId/retry`, {
+    preHandler: [authenticateInstallation, validateInstallationId()],
+    schema: {
+      params: {
+        type: "object",
+        properties: {
+          installationId: { type: "string" },
+          jobId: { type: "string" },
         },
+        required: ["installationId", "jobId"],
       },
     },
-    async (request: FastifyRequest<{ Params: JobParams }>, reply: FastifyReply) => {
-      const { installationId, jobId } = request.params;
-      const installationIdNum = parseIntParam(installationId);
-      if (installationIdNum === null) {
-        return reply.code(400).send({ error: "Invalid installationId" });
-      }
+  } as RouteHandlerMethod, async (req, reply) => {
+    const installationId = (req as any).installationId as number;
+    const { jobId } = req.params;
 
-      const job = await findJob(installationIdNum, jobId);
-      if (!job) {
-        return reply.code(404).send({ error: "Job not found" });
-      }
+    const job = await getJob(installationId, jobId);
+    if (!job) {
+      reply.code(404).send({ error: "Job not found" });
+      return;
+    }
 
-      if (job.status !== "failed") {
-        return reply.code(400).send({ error: "Only failed jobs can be retried" });
-      }
+    if (job.status !== JobStatus.Failed) {
+      reply.code(400).send({ error: "Only failed jobs can be retried" });
+      return;
+    }
 
-      await queueService.retryJob(jobId);
-      return reply.send({ success: true, message: "Job queued for retry" });
-    },
-  );
+    await queueService.retryJob(jobId);
+    reply.send({ success: true, message: "Job queued for retry" });
+  });
 
   /* --------------------------------- STATS -------------------------------- */
-  fastify.get(
-    "/installations/:installationId/stats",
-    {
-      preHandler: [authenticateInstallation],
-      schema: {
-        params: {
-          type: "object",
-          properties: { installationId: { type: "string" } },
-          required: ["installationId"],
-        },
+  fastify.get<{
+    Params: InstallationParams;
+  }>(`${basePath}/stats`, {
+    preHandler: [authenticateInstallation, validateInstallationId()],
+    schema: {
+      params: {
+        type: "object",
+        properties: { installationId: { type: "string" } },
+        required: ["installationId"],
       },
     },
-    async (request: FastifyRequest<{ Params: InstallationParams }>, reply: FastifyReply) => {
-      const installationIdNum = parseIntParam(request.params.installationId);
-      if (installationIdNum === null) {
-        return reply.code(400).send({ error: "Invalid installationId" });
-      }
+  } as RouteHandlerMethod, async (req, reply) => {
+    const installationId = (req as any).installationId as number;
 
-      const rows = await db
-        .select({
-          status: jobs.status,
-          count: sqlCount(),
-        })
-        .from(jobs)
-        .where(eq(jobs.installationId, installationIdNum))
-        .groupBy(jobs.status);
+    const rows = await db
+      .select({
+        status: jobs.status,
+        count: sqlCount(),
+      })
+      .from(jobs)
+      .where(eq(jobs.installationId, installationId))
+      .groupBy(jobs.status);
 
-      const stats = {
-        total: 0,
-        queued: 0,
-        in_progress: 0,
-        completed: 0,
-        failed: 0,
-        cancelled: 0,
-      };
+    const stats = {
+      total: 0,
+      [JobStatus.Queued]: 0,
+      [JobStatus.InProgress]: 0,
+      [JobStatus.Completed]: 0,
+      [JobStatus.Failed]: 0,
+      [JobStatus.Cancelled]: 0,
+    };
 
-      rows.forEach((row) => {
-        const statusKey = row.status as keyof typeof stats;
-        stats[statusKey] = Number(row.count);
-        stats.total += Number(row.count);
-      });
+    for (const { status, count } of rows) {
+      const key = status as keyof typeof stats;
+      const value = Number(count);
+      stats[key] = value;
+      stats.total += value;
+    }
 
-      return reply.send({ stats });
-    },
-  );
+    reply.send({ stats });
+  });
 }
 ```

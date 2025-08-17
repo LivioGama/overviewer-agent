@@ -1,5 +1,10 @@
 ```ts
-import Fastify, { FastifyInstance, FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import Fastify, {
+  FastifyInstance,
+  FastifyError,
+  FastifyReply,
+  FastifyRequest,
+} from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -11,34 +16,35 @@ import { webhookRoutes } from "./apps/backend/routes/webhooks.js";
 import { queueService } from "./apps/backend/services/queue.js";
 
 /* -------------------------------------------------------------------------- */
-/*                         Server & Logger Configuration                       */
+/*                              Server Factory                                 */
 /* -------------------------------------------------------------------------- */
-function createFastifyInstance(): FastifyInstance {
-  const loggerConfig =
-    env.NODE_ENV === "development"
-      ? {
-          level: env.LOG_LEVEL,
-          transport: {
-            target: "pino-pretty",
-            options: {
-              translateTime: "HH:MM:ss Z",
-              ignore: "pid,hostname",
-            },
-          },
-        }
-      : { level: env.LOG_LEVEL };
+function buildServer(): FastifyInstance {
+  const isDev = env.NODE_ENV === "development";
 
-  return Fastify({ logger: loggerConfig });
+  const logger = isDev
+    ? {
+        level: env.LOG_LEVEL,
+        transport: {
+          target: "pino-pretty",
+          options: {
+            translateTime: "HH:MM:ss Z",
+            ignore: "pid,hostname",
+          },
+        },
+      }
+    : { level: env.LOG_LEVEL };
+
+  return Fastify({ logger });
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               Plugin Registration                           */
+/*                              Plugin Registration                             */
 /* -------------------------------------------------------------------------- */
 async function registerPlugins(app: FastifyInstance): Promise<void> {
   await app.register(helmet, { contentSecurityPolicy: false });
 
   await app.register(cors, {
-    origin: env.NODE_ENV === "development" ? true : false,
+    origin: env.NODE_ENV === "development",
   });
 
   await app.register(rateLimit, {
@@ -48,66 +54,88 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               Route Registration                            */
+/*                              Route Registration                              */
 /* -------------------------------------------------------------------------- */
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await app.register(authRoutes);
-  await app.register(webhookRoutes);
-  await app.register(jobRoutes);
+  await Promise.all([
+    app.register(authRoutes),
+    app.register(webhookRoutes),
+    app.register(jobRoutes),
+  ]);
 
+  // Simple health‑check endpoint
   app.get(
     "/health",
-    async (_: FastifyRequest, reply: FastifyReply) =>
+    async (_: FastifyRequest, reply: FastifyReply) => {
       reply.send({
         status: "healthy",
         timestamp: new Date().toISOString(),
         version: process.env.npm_package_version ?? "0.1.0",
         environment: env.NODE_ENV,
-      })
+      });
+    }
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/*                              Global Error Handler                           */
+/*                        Global Error Handling Middleware                     */
 /* -------------------------------------------------------------------------- */
-function setGlobalErrorHandler(app: FastifyInstance): void {
-  app.setErrorHandler((error: FastifyError, _: FastifyRequest, reply: FastifyReply) => {
-    app.log.error(error);
+function setErrorHandler(app: FastifyInstance): void {
+  app.setErrorHandler(
+    (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
+      app.log.error(error);
 
-    if (error.validation) {
-      return reply.status(400).send({
-        error: "Validation error",
-        details: error.validation,
-      });
+      // Validation errors are thrown by Fastify schema validation
+      if (error.validation) {
+        return reply
+          .status(400)
+          .send({ error: "Validation error", details: error.validation });
+      }
+
+      // Respect explicit status codes (e.g., from auth libraries)
+      if (error.statusCode && error.message) {
+        return reply.status(error.statusCode).send({ error: error.message });
+      }
+
+      // Fallback for unexpected errors
+      return reply.status(500).send({ error: "Internal server error" });
     }
-
-    if (error.statusCode) {
-      return reply.status(error.statusCode).send({ error: error.message });
-    }
-
-    return reply.status(500).send({ error: "Internal server error" });
-  });
+  );
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                 Server Startup                               */
+/*                              Graceful Shutdown                               */
+/* -------------------------------------------------------------------------- */
+async function gracefulShutdown(app: FastifyInstance): Promise<void> {
+  try {
+    await queueService.disconnect();
+  } finally {
+    await app.close();
+    process.exit(0);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Server Bootstrap                                 */
 /* -------------------------------------------------------------------------- */
 async function start(): Promise<void> {
-  const app = createFastifyInstance();
+  const app = buildServer();
 
-  // Graceful shutdown hook
-  app.addHook("onClose", async () => {
-    await queueService.disconnect();
-  });
+  // Close hook for Fastify‑initiated shutdowns (e.g., SIGTERM)
+  app.addHook("onClose", async () => queueService.disconnect());
 
   try {
     await registerPlugins(app);
     await registerRoutes(app);
-    setGlobalErrorHandler(app);
+    setErrorHandler(app);
 
+    // Initialise background consumer before accepting traffic
     await queueService.createConsumerGroup();
 
-    const address = await app.listen({ port: env.PORT, host: "0.0.0.0" });
+    const address = await app.listen({
+      port: env.PORT,
+      host: "0.0.0.0",
+    });
 
     app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
     app.log.info(`Environment: ${env.NODE_ENV}`);
@@ -119,26 +147,18 @@ async function start(): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               Signal Handling                               */
+/*                                Signal Handling                               */
 /* -------------------------------------------------------------------------- */
-function handleSignal(signal: NodeJS.Signals): void {
-  process.once(signal, async () => {
-    console.info(`Received ${signal}, shutting down gracefully`);
-    try {
-      await queueService.disconnect();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      process.exit(0);
-    }
+["SIGINT", "SIGTERM"].forEach((sig) => {
+  process.once(sig as NodeJS.Signals, async () => {
+    const app = Fastify(); // a minimal instance to log shutdown info
+    app.log.info(`Received ${sig}, commencing graceful shutdown`);
+    await gracefulShutdown(app);
   });
-}
-
-handleSignal("SIGTERM");
-handleSignal("SIGINT");
+});
 
 /* -------------------------------------------------------------------------- */
-/*                                   Run                                      */
+/*                                   Run                                        */
 /* -------------------------------------------------------------------------- */
-start();
+await start();
 ```

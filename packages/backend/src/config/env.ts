@@ -1,41 +1,57 @@
+```ts
 import { validateEnv } from "@ollama-turbo-agent/shared";
 import { z } from "zod";
 
-const EnvSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "production", "test"])
-    .default("development"),
-  PORT: z
-    .string()
-    .transform(Number)
-    .pipe(z.number().int().positive())
-    .default("3001"),
+/* -------------------------------------------------------------------------- */
+/* Helper schemas                                                             */
+/* -------------------------------------------------------------------------- */
 
-  GITHUB_APP_ID: z.string().min(1),
-  GITHUB_APP_PRIVATE_KEY: z.string().min(1),
-  GITHUB_WEBHOOK_SECRET: z.string().min(1),
-  GITHUB_CLIENT_ID: z.string().min(1),
-  GITHUB_CLIENT_SECRET: z.string().min(1),
+const requiredString = (min: number = 1) => z.string().min(min);
+const optionalString = (min: number = 0) => z.string().min(min).optional();
 
-  DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+/* -------------------------------------------------------------------------- */
+/* Environment schema                                                         */
+/* -------------------------------------------------------------------------- */
 
-  OLLAMA_API_URL: z.string().url().default("https://ollama.com"),
-  OLLAMA_API_KEY: z.string().optional(),
+export const envSchema = z
+  .object({
+    // General
+    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+    PORT: z.coerce.number().int().positive().default(3001),
 
-  AWS_REGION: z.string().default("us-east-1"),
-  AWS_ACCESS_KEY_ID: z.string().optional(),
-  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+    // GitHub integration
+    GITHUB_APP_ID: requiredString(),
+    GITHUB_APP_PRIVATE_KEY: requiredString(),
+    GITHUB_WEBHOOK_SECRET: requiredString(),
+    GITHUB_CLIENT_ID: requiredString(),
+    GITHUB_CLIENT_SECRET: requiredString(),
 
-  LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
+    // Persistence
+    DATABASE_URL: z.string().url(),
+    REDIS_URL: z.string().url(),
 
-  RATE_LIMIT_MAX: z
-    .string()
-    .transform(Number)
-    .pipe(z.number().int().positive())
-    .default("100"),
-  RATE_LIMIT_WINDOW: z.string().default("1 minute"),
-});
+    // Ollama service
+    OLLAMA_API_URL: z.string().url().default("https://ollama.com"),
+    OLLAMA_API_KEY: optionalString(),
 
-export const env = validateEnv(EnvSchema);
-export type Env = z.infer<typeof EnvSchema>;
+    // AWS credentials
+    AWS_REGION: z.string().default("us-east-1"),
+    AWS_ACCESS_KEY_ID: optionalString(),
+    AWS_SECRET_ACCESS_KEY: optionalString(),
+
+    // Logging
+    LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
+
+    // Rate limiting
+    RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+    RATE_LIMIT_WINDOW: z.string().default("1 minute"),
+  })
+  .strict();
+
+/* -------------------------------------------------------------------------- */
+/* Exported values                                                             */
+/* -------------------------------------------------------------------------- */
+
+export const env = validateEnv(envSchema);
+export type Env = z.infer<typeof envSchema>;
+```
