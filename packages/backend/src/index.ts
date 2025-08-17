@@ -1,12 +1,14 @@
+```ts
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
-import { env } from "./config/env.js";
-import { authRoutes } from "./routes/auth.js";
-import { jobRoutes } from "./routes/jobs.js";
-import { webhookRoutes } from "./routes/webhooks.js";
-import { queueService } from "./services/queue.js";
+
+import { env } from "./config/env";
+import { authRoutes } from "./routes/auth";
+import { jobRoutes } from "./routes/jobs";
+import { webhookRoutes } from "./routes/webhooks";
+import { queueService } from "./services/queue";
 
 const fastify = Fastify({
   logger:
@@ -28,14 +30,10 @@ const fastify = Fastify({
 
 const start = async () => {
   try {
-    await fastify.register(helmet, {
-      contentSecurityPolicy: false,
-    });
-
+    await fastify.register(helmet, { contentSecurityPolicy: false });
     await fastify.register(cors, {
       origin: env.NODE_ENV === "development" ? true : false,
     });
-
     await fastify.register(rateLimit, {
       max: env.RATE_LIMIT_MAX,
       timeWindow: env.RATE_LIMIT_WINDOW,
@@ -49,7 +47,7 @@ const start = async () => {
       return reply.send({
         status: "healthy",
         timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version || "0.1.0",
+        version: process.env.npm_package_version ?? "0.1.0",
         environment: env.NODE_ENV,
       });
     });
@@ -57,16 +55,16 @@ const start = async () => {
     fastify.setErrorHandler((error, _, reply) => {
       fastify.log.error(error);
 
-      if (error.validation) {
+      if ((error as any).validation) {
         return reply.status(400).send({
           error: "Validation error",
-          details: error.validation,
+          details: (error as any).validation,
         });
       }
 
-      if (error.statusCode) {
-        return reply.status(error.statusCode).send({
-          error: error.message,
+      if ((error as any).statusCode) {
+        return reply.status((error as any).statusCode).send({
+          error: (error as any).message,
         });
       }
 
@@ -93,7 +91,6 @@ const start = async () => {
 
 const shutdown = async (signal: string) => {
   fastify.log.info(`Received ${signal}, shutting down gracefully`);
-
   try {
     await queueService.disconnect();
     await fastify.close();
@@ -104,7 +101,15 @@ const shutdown = async (signal: string) => {
   }
 };
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("unhandledRejection", (reason) => {
+  fastify.log.error({ reason }, "Unhandled Promise Rejection");
+});
+process.on("uncaughtException", (err) => {
+  fastify.log.error(err, "Uncaught Exception");
+  process.exit(1);
+});
 
 start();
+```
