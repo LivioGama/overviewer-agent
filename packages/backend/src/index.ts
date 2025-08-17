@@ -31,7 +31,7 @@ const loggerConfig = {
       },
     },
   }),
-};
+} as const;
 
 /* -------------------------------------------------------------------------- */
 /* Fastify instance creation                                                  */
@@ -39,28 +39,24 @@ const loggerConfig = {
 const fastify: FastifyInstance = Fastify({ logger: loggerConfig });
 
 /* -------------------------------------------------------------------------- */
-/* Plugin registration                                                         */
+/* Plugins registration                                                       */
 /* -------------------------------------------------------------------------- */
 async function registerPlugins(app: FastifyInstance): Promise<void> {
-  await Promise.all([
-    app.register(helmet, { contentSecurityPolicy: false }),
-    app.register(cors, { origin: isDev }),
-    app.register(rateLimit, {
-      max: env.RATE_LIMIT_MAX,
-      timeWindow: env.RATE_LIMIT_WINDOW,
-    }),
-  ]);
+  await app.register(helmet, { contentSecurityPolicy: false });
+  await app.register(cors, { origin: isDev });
+  await app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
-/* Route registration                                                          */
+/* Routes registration                                                        */
 /* -------------------------------------------------------------------------- */
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await Promise.all([
-    app.register(authRoutes),
-    app.register(webhookRoutes),
-    app.register(jobRoutes),
-  ]);
+  await app.register(authRoutes);
+  await app.register(webhookRoutes);
+  await app.register(jobRoutes);
 
   app.get("/health", async (_, reply: FastifyReply) => {
     reply.send({
@@ -80,29 +76,31 @@ fastify.setErrorHandler(
     fastify.log.error(error);
 
     if ("validation" in error && error.validation) {
-      return reply.status(400).send({
+      reply.status(400).send({
         error: "Validation error",
         details: error.validation,
       });
+      return;
     }
 
     if (error.statusCode) {
-      return reply.status(error.statusCode).send({ error: error.message });
+      reply.status(error.statusCode).send({ error: error.message });
+      return;
     }
 
-    return reply.status(500).send({ error: "Internal server error" });
+    reply.status(500).send({ error: "Internal server error" });
   }
 );
 
 /* -------------------------------------------------------------------------- */
-/* Graceful shutdown hook for external resources                              */
+/* Graceful shutdown of external resources                                    */
 /* -------------------------------------------------------------------------- */
 fastify.addHook("onClose", async () => {
   await queueService.disconnect();
 });
 
 /* -------------------------------------------------------------------------- */
-/* Application start                                                          */
+/* Application bootstrap                                                     */
 /* -------------------------------------------------------------------------- */
 async function start(): Promise<void> {
   try {
@@ -151,7 +149,7 @@ process.on("uncaughtException", (err) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/* Entry point                                                                 */
+/* Entry point                                                                */
 /* -------------------------------------------------------------------------- */
 void start();
 ```

@@ -2,14 +2,16 @@
 import { z } from "zod";
 import { validateEnv } from "./shared";
 
+/**
+ * Schema for all required and optional environment variables.
+ * Zod's coercion helpers keep the definitions succinct.
+ */
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "production", "test"] as const).default("development"),
 
-    // Convert string -> number, then validate
-    PORT: z
-      .preprocess((val) => Number(val), z.number().int().positive())
-      .default(3001),
+    // Convert string → number and validate.
+    PORT: z.coerce.number().int().positive().default(3001),
 
     GITHUB_APP_ID: z.string().min(1),
     GITHUB_APP_PRIVATE_KEY: z.string().min(1),
@@ -29,25 +31,24 @@ const envSchema = z
 
     LOG_LEVEL: z.enum(["error", "warn", "info", "debug"] as const).default("info"),
 
-    RATE_LIMIT_MAX: z
-      .preprocess((val) => Number(val), z.number().int().positive())
-      .default(100),
-
+    RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
     RATE_LIMIT_WINDOW: z.string().default("1 minute"),
   })
   .strict();
 
-type Env = z.infer<typeof envSchema>;
+/** Typed representation of the validated environment. */
+export type Env = z.infer<typeof envSchema>;
 
-let env: Env;
-
-try {
-  env = validateEnv(envSchema);
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  throw new Error(`Environment validation failed: ${message}`);
-}
-
-export { env };
-export type { Env };
+/**
+ * Validate `process.env` against the schema.
+ * On failure, augment the error message and re‑throw.
+ */
+export const env: Env = (() => {
+  try {
+    return validateEnv(envSchema);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`❌ Environment validation failed: ${message}`);
+  }
+})();
 ```
