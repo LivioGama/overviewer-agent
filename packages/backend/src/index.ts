@@ -34,9 +34,7 @@ type Signal = (typeof SIGNALS)[number];
 function createLoggerConfig(): FastifyLoggerOptions {
   const base = { level: env.LOG_LEVEL } as const;
 
-  if (env.NODE_ENV !== 'development') {
-    return base;
-  }
+  if (env.NODE_ENV !== 'development') return base;
 
   return {
     ...base,
@@ -76,11 +74,9 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await Promise.all([
-    app.register(authRoutes),
-    app.register(webhookRoutes),
-    app.register(jobRoutes),
-  ]);
+  await app.register(authRoutes);
+  await app.register(webhookRoutes);
+  await app.register(jobRoutes);
   app.get('/health', healthHandler);
 }
 
@@ -88,7 +84,10 @@ async function registerRoutes(app: FastifyInstance): Promise<void> {
  * Health‑check handler
  * ───────────────────────────────────────────────────────────────────────────── */
 
-function healthHandler(_req: FastifyRequest, reply: FastifyReply): void {
+function healthHandler(
+  _req: FastifyRequest,
+  reply: FastifyReply,
+): void {
   reply.send({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -106,7 +105,7 @@ function setErrorHandler(app: FastifyInstance): void {
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Validation errors (Fastify schema validation)
+      // Fastify schema validation errors
       if (error.validation) {
         void reply
           .status(400)
@@ -131,7 +130,11 @@ function setErrorHandler(app: FastifyInstance): void {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 async function closeResources(app: FastifyInstance): Promise<void> {
-  const tasks = [queueService.disconnect(), app.close()];
+  const tasks: Promise<unknown>[] = [
+    queueService.disconnect(),
+    app.close(),
+  ];
+
   const results = await Promise.allSettled(tasks);
 
   for (const result of results) {
@@ -150,12 +153,28 @@ async function closeResources(app: FastifyInstance): Promise<void> {
 
 function registerSignalHandlers(app: FastifyInstance): void {
   for (const sig of SIGNALS) {
-    process.once(sig, async () => {
+    process.once(sig as Signal, async () => {
       app.log.info(`Received ${sig}, initiating graceful shutdown`);
       await closeResources(app);
       process.exit(0);
     });
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Uncaught errors handling (process‑wide)
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+function registerProcessErrorHandlers(app: FastifyInstance): void {
+  process.on('unhandledRejection', (reason) => {
+    app.log.error({ err: reason }, 'Unhandled Promise rejection');
+  });
+
+  process.on('uncaughtException', (err) => {
+    app.log.error(err, 'Uncaught exception');
+    // Allow the process to exit after logging.
+    process.exit(1);
+  });
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -169,6 +188,7 @@ async function bootstrap(): Promise<void> {
     await registerPlugins(app);
     await registerRoutes(app);
     setErrorHandler(app);
+    registerProcessErrorHandlers(app);
 
     // Initialise queue consumer before the HTTP server starts listening
     await queueService.createConsumerGroup();
@@ -186,8 +206,10 @@ async function bootstrap(): Promise<void> {
 
     registerSignalHandlers(app);
   } catch (err) {
-    // If Fastify logger is already initialised use it, otherwise fallback to console
-    const logger = app?.log ?? console;
+    // Fastify logger may not be initialised; fallback to console
+    const logger = (app?.log ?? console) as {
+      error: (obj: unknown, msg?: string) => void;
+    };
     logger.error({ err }, 'Failed to start server');
     process.exit(1);
   }
@@ -197,5 +219,5 @@ async function bootstrap(): Promise<void> {
  * Run entry point
  * ───────────────────────────────────────────────────────────────────────────── */
 
-bootstrap();
+void bootstrap();
 ```
