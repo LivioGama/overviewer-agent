@@ -29,11 +29,6 @@ FROM node:20-alpine AS runner
 # Install system dependencies
 RUN apk add --no-cache git openssh-client curl
 
-# Configure git for automated commits
-RUN git config --global user.email "bot@ollama-turbo-agent.local" && \
-    git config --global user.name "Ollama Turbo Agent Bot" && \
-    git config --global init.defaultBranch main
-
 # Install Ollama CLI (optional, for local development)
 RUN curl -fsSL https://ollama.ai/install.sh | sh || true
 
@@ -54,6 +49,11 @@ ENV NODE_ENV=production
 ENV WORKSPACE_ROOT=/tmp/ollama-turbo-workspaces
 
 USER node
+
+# Configure git for automated commits as the node user
+RUN git config --global user.email "bot@ollama-turbo-agent.local" && \
+    git config --global user.name "Ollama Turbo Agent Bot" && \
+    git config --global init.defaultBranch main
 
 CMD ["node", "./dist/index.js"]
 
