@@ -45,7 +45,7 @@ export const issues = pgTable("issues", {
   issueBody: text("issue_body"),
   analysisResult: jsonb("analysis_result"),
   status: varchar("status", { length: 50 }).default("pending").notNull(),
-  assignedJobId: uuid("assigned_job_id").references(() => jobs.id),
+  assignedJobId: uuid("assigned_job_id").references(() => jobs.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at")
     .default(sql`NOW()`)
     .notNull(),
@@ -60,7 +60,7 @@ export const prReviews = pgTable("pr_reviews", {
     .default(sql`gen_random_uuid()`),
   jobId: uuid("job_id")
     .notNull()
-    .references(() => jobs.id),
+    .references(() => jobs.id, { onDelete: "cascade" }),
   prNumber: integer("pr_number").notNull(),
   reviewResult: jsonb("review_result"),
   approved: boolean("approved").default(false),

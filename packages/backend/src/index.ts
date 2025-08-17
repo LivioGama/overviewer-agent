@@ -26,6 +26,27 @@ const fastify = Fastify({
         },
 });
 
+fastify.setErrorHandler((error, _request, reply) => {
+  fastify.log.error(error);
+
+  if (error.validation) {
+    return reply.status(400).send({
+      error: "Validation error",
+      details: error.validation,
+    });
+  }
+
+  if (error.statusCode) {
+    return reply.status(error.statusCode).send({
+      error: error.message,
+    });
+  }
+
+  return reply.status(500).send({
+    error: "Internal server error",
+  });
+});
+
 const start = async () => {
   try {
     await fastify.register(helmet, {
@@ -51,27 +72,6 @@ const start = async () => {
         timestamp: new Date().toISOString(),
         version: process.env.npm_package_version || "0.1.0",
         environment: env.NODE_ENV,
-      });
-    });
-
-    fastify.setErrorHandler((error, _, reply) => {
-      fastify.log.error(error);
-
-      if (error.validation) {
-        return reply.status(400).send({
-          error: "Validation error",
-          details: error.validation,
-        });
-      }
-
-      if (error.statusCode) {
-        return reply.status(error.statusCode).send({
-          error: error.message,
-        });
-      }
-
-      return reply.status(500).send({
-        error: "Internal server error",
       });
     });
 
@@ -106,5 +106,14 @@ const shutdown = async (signal: string) => {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+
+process.on("uncaughtException", (err) => {
+  fastify.log.error(err, "Uncaught Exception");
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason: any) => {
+  fastify.log.error(reason, "Unhandled Rejection");
+  process.exit(1);
+});
 
 start();

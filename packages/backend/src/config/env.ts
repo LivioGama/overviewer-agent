@@ -1,9 +1,9 @@
-import { validateEnv } from "@ollama-turbo-agent/shared";
+import { validateEnv } from "../../shared";
 import { z } from "zod";
 
 const EnvSchema = z.object({
   NODE_ENV: z
-    .enum(["development", "production", "test"])
+    .enum(["development", "production", "test"])\
     .default("development"),
   PORT: z
     .string()
