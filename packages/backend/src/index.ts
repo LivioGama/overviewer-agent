@@ -19,6 +19,8 @@ import { jobRoutes } from './apps/backend/routes/jobs.js';
 import { webhookRoutes } from './apps/backend/routes/webhooks.js';
 import { queueService } from './apps/backend/services/queue.js';
 
+type Signal = NodeJS.Signals;
+
 /*───────────────────────────────────────*/
 /*  Server factory                       */
 /*───────────────────────────────────────*/
@@ -46,11 +48,7 @@ function createServer(): FastifyInstance {
 /*───────────────────────────────────────*/
 async function registerPlugins(app: FastifyInstance): Promise<void> {
   await app.register(helmet, { contentSecurityPolicy: false });
-
-  await app.register(cors, {
-    origin: env.NODE_ENV === 'development',
-  });
-
+  await app.register(cors, { origin: env.NODE_ENV === 'development' });
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW,
@@ -61,11 +59,9 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
 /*  Route registration (async)            */
 /*───────────────────────────────────────*/
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await Promise.all([
-    app.register(authRoutes),
-    app.register(webhookRoutes),
-    app.register(jobRoutes),
-  ]);
+  await app.register(authRoutes);
+  await app.register(webhookRoutes);
+  await app.register(jobRoutes);
 
   app.get('/health', healthHandler);
 }
@@ -89,24 +85,21 @@ async function healthHandler(
 function setErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler(
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
-      // Centralised logging
       app.log.error(error);
 
-      // Validation errors (Fastify schema validation)
       if (error.validation) {
-        void reply
-          .status(400)
-          .send({ error: 'Validation error', details: error.validation });
+        void reply.status(400).send({
+          error: 'Validation error',
+          details: error.validation,
+        });
         return;
       }
 
-      // Known client/server errors with explicit status
       if (error.statusCode && error.message) {
         void reply.status(error.statusCode).send({ error: error.message });
         return;
       }
 
-      // Fallback – unexpected runtime errors
       void reply.status(500).send({ error: 'Internal server error' });
     },
   );
@@ -116,27 +109,24 @@ function setErrorHandler(app: FastifyInstance): void {
 /*  Graceful shutdown helpers             */
 /*───────────────────────────────────────*/
 async function closeResources(app: FastifyInstance): Promise<void> {
-  await queueService.disconnect();
-  await app.close();
+  await Promise.allSettled([queueService.disconnect(), app.close()]);
 }
 
 /*───────────────────────────────────────*/
 /*  Application bootstrap                 */
 /*───────────────────────────────────────*/
-async function start(): Promise<void> {
+async function bootstrap(): Promise<void> {
   const app = createServer();
 
-  // Ensure resources are released on Fastify shutdown (e.g., SIGTERM)
+  // Ensure queue is closed when Fastify shuts down
   app.addHook('onClose', async () => {
     await queueService.disconnect();
   });
 
-  // Register core functionality before listening for traffic
   await registerPlugins(app);
   await registerRoutes(app);
   setErrorHandler(app);
 
-  // Initialise background consumer first
   await queueService.createConsumerGroup();
 
   const address = await app.listen({
@@ -148,23 +138,23 @@ async function start(): Promise<void> {
   app.log.info(`Environment: ${env.NODE_ENV}`);
   app.log.info(`Log level: ${env.LOG_LEVEL}`);
 
-  // Graceful termination handling
-  const handleSignal = async (signal: NodeJS.Signals) => {
+  // Signal handling
+  const handleSignal = async (signal: Signal): Promise<void> => {
     app.log.info(`Received ${signal}, commencing graceful shutdown`);
     await closeResources(app);
     process.exit(0);
   };
 
-  ['SIGINT', 'SIGTERM'].forEach((sig) => {
-    process.once(sig as NodeJS.Signals, () => handleSignal(sig as NodeJS.Signals));
-  });
+  for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(sig, () => handleSignal(sig));
+  }
 }
 
 /*───────────────────────────────────────*/
 /*  Run entry point                       */
 /*───────────────────────────────────────*/
-start().catch((err) => {
-  // Unexpected bootstrap failures
+bootstrap().catch((err: unknown) => {
+  // Fatal startup error
   // eslint-disable-next-line no-console
   console.error('Failed to start server:', err);
   process.exit(1);
