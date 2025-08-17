@@ -23,8 +23,8 @@ import { queueService } from './apps/backend/services/queue.js';
  * Types & Constants
  * ───────────────────────────────────────────────────────────────────────────── */
 
-type Signal = NodeJS.Signals;
-const SIGNALS = ['SIGINT', 'SIGTERM'] as const satisfies readonly Signal[];
+const SIGNALS = ['SIGINT', 'SIGTERM'] as const;
+type Signal = (typeof SIGNALS)[number];
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Logger configuration
@@ -33,7 +33,9 @@ const SIGNALS = ['SIGINT', 'SIGTERM'] as const satisfies readonly Signal[];
 function createLoggerConfig(): FastifyInstance['options']['logger'] {
   const base = { level: env.LOG_LEVEL } as const;
 
-  if (env.NODE_ENV !== 'development') return base;
+  if (env.NODE_ENV !== 'development') {
+    return base;
+  }
 
   return {
     ...base,
@@ -83,7 +85,10 @@ async function registerRoutes(app: FastifyInstance): Promise<void> {
  * Health‑check handler
  * ───────────────────────────────────────────────────────────────────────────── */
 
-function healthHandler(_req: FastifyRequest, reply: FastifyReply): void {
+function healthHandler(
+  _req: FastifyRequest,
+  reply: FastifyReply,
+): void {
   reply.send({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -101,7 +106,7 @@ function setErrorHandler(app: FastifyInstance): void {
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Schema validation errors
+      // Validation errors (Fastify schema validation)
       if (error.validation) {
         void reply.status(400).send({
           error: 'Validation error',
@@ -110,7 +115,7 @@ function setErrorHandler(app: FastifyInstance): void {
         return;
       }
 
-      // Fastify‑thrown HTTP errors
+      // Fastify‑generated HTTP errors (e.g., NotFound, BadRequest)
       if (error.statusCode && error.message) {
         void reply.status(error.statusCode).send({ error: error.message });
         return;
@@ -127,12 +132,15 @@ function setErrorHandler(app: FastifyInstance): void {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 async function closeResources(app: FastifyInstance): Promise<void> {
-  const jobs = [queueService.disconnect(), app.close()];
-  const results = await Promise.allSettled(jobs);
+  const tasks = [queueService.disconnect(), app.close()];
+  const results = await Promise.allSettled(tasks);
 
   for (const result of results) {
     if (result.status === 'rejected') {
-      app.log.error({ err: result.reason }, 'Shutdown task failed');
+      app.log.error(
+        { err: result.reason },
+        'Shutdown task failed',
+      );
     }
   }
 }
@@ -143,6 +151,7 @@ async function closeResources(app: FastifyInstance): Promise<void> {
 
 function registerSignalHandlers(app: FastifyInstance): void {
   for (const sig of SIGNALS) {
+    // `once` ensures we react only to the first occurrence
     process.once(sig, async () => {
       app.log.info(`Received ${sig}, initiating graceful shutdown`);
       await closeResources(app);
@@ -162,10 +171,16 @@ async function bootstrap(): Promise<void> {
   await registerRoutes(app);
   setErrorHandler(app);
 
-  // Prepare queue consumer before listening
+  // Initialise queue consumer before the HTTP server starts listening
   await queueService.createConsumerGroup();
 
-  const address = await app.listen({ host: '0.0.0.0', port: env.PORT });
+  await app.ready(); // Ensure all plugins/registrations are complete
+
+  const address = await app.listen({
+    host: '0.0.0.0',
+    port: env.PORT,
+  });
+
   app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
   app.log.info(`Environment: ${env.NODE_ENV}`);
   app.log.info(`Log level: ${env.LOG_LEVEL}`);
@@ -178,7 +193,7 @@ async function bootstrap(): Promise<void> {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 bootstrap().catch((err: unknown) => {
-  // Using console.error as logger may not be available at this stage
+  // Logger may not be available yet, fallback to console
   console.error('Failed to start server:', err);
   process.exit(1);
 });
