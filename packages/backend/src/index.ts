@@ -23,15 +23,13 @@ import { queueService } from './apps/backend/services/queue.js';
 /*  Types & Constants                      */
 /*───────────────────────────────────────*/
 type Signal = NodeJS.Signals;
-const SIGNALS: readonly Signal[] = ['SIGINT', 'SIGTERM'] as const;
+const SIGNALS = ['SIGINT', 'SIGTERM'] as const satisfies readonly Signal[];
 
 /*───────────────────────────────────────*/
 /*  Logger configuration                    */
 /*───────────────────────────────────────*/
 function createLoggerConfig() {
-  const base = {
-    level: env.LOG_LEVEL,
-  } as const;
+  const base = { level: env.LOG_LEVEL } as const;
 
   if (env.NODE_ENV === 'development') {
     return {
@@ -101,7 +99,7 @@ function setErrorHandler(app: FastifyInstance): void {
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Validation errors from Fastify schema checks
+      // Fastify schema validation errors
       if (error.validation) {
         void reply.status(400).send({
           error: 'Validation error',
@@ -116,14 +114,14 @@ function setErrorHandler(app: FastifyInstance): void {
         return;
       }
 
-      // Fallback for unexpected errors
+      // Unexpected errors
       void reply.status(500).send({ error: 'Internal server error' });
     },
   );
 }
 
 /*───────────────────────────────────────*/
-/*  Graceful shutdown helpers              */
+/*  Graceful shutdown                      */
 /*───────────────────────────────────────*/
 async function closeResources(app: FastifyInstance): Promise<void> {
   const tasks = [
@@ -143,17 +141,13 @@ async function closeResources(app: FastifyInstance): Promise<void> {
 /*───────────────────────────────────────*/
 /*  Signal handling                        */
 /*───────────────────────────────────────*/
-function handleSignal(app: FastifyInstance, signal: Signal): void {
-  app.log.info(`Received ${signal}, commencing graceful shutdown`);
-  void closeResources(app).finally(() => process.exit(0));
-}
-
-/*───────────────────────────────────────*/
-/*  Graceful‑shutdown registration          */
-/*───────────────────────────────────────*/
 function registerSignalHandlers(app: FastifyInstance): void {
   for (const sig of SIGNALS) {
-    process.once(sig, () => handleSignal(app, sig));
+    process.once(sig, async () => {
+      app.log.info(`Received ${sig}, commencing graceful shutdown`);
+      await closeResources(app);
+      process.exit(0);
+    });
   }
 }
 
@@ -162,11 +156,6 @@ function registerSignalHandlers(app: FastifyInstance): void {
 /*───────────────────────────────────────*/
 async function bootstrap(): Promise<void> {
   const app = buildServer();
-
-  // Ensure queue service disconnects when Fastify closes
-  app.addHook('onClose', async () => {
-    await queueService.disconnect();
-  });
 
   await registerPlugins(app);
   await registerRoutes(app);
@@ -190,11 +179,8 @@ async function bootstrap(): Promise<void> {
 /*  Run entry point                        */
 /*───────────────────────────────────────*/
 bootstrap().catch((err: unknown) => {
-  // Use Fastify logger if possible; fall back to console
-  const logger = typeof console !== 'undefined' ? console : undefined;
-  if (logger?.error) {
-    logger.error('Failed to start server:', err);
-  }
+  const logger = console;
+  logger.error('Failed to start server:', err);
   process.exit(1);
 });
 ```
