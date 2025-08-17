@@ -37,41 +37,37 @@ const loggerConfig: FastifyLoggerOptions = {
 /* -------------------------------------------------------------------------- */
 /* Fastify instance creation                                                  */
 /* -------------------------------------------------------------------------- */
-const app: FastifyInstance = Fastify({ logger: loggerConfig });
+function createApp(): FastifyInstance {
+  return Fastify({ logger: loggerConfig });
+}
 
 /* -------------------------------------------------------------------------- */
 /* Plugins registration                                                       */
 /* -------------------------------------------------------------------------- */
-async function registerPlugins(server: FastifyInstance): Promise<void> {
-  try {
-    await server.register(helmet, { contentSecurityPolicy: false });
-    await server.register(cors, { origin: isDev });
-    await server.register(rateLimit, {
-      max: env.RATE_LIMIT_MAX,
-      timeWindow: env.RATE_LIMIT_WINDOW,
-    });
-  } catch (err) {
-    server.log.error(err, "Failed to register plugins");
-    throw err;
-  }
+async function registerPlugins(app: FastifyInstance): Promise<void> {
+  await app.register(helmet, { contentSecurityPolicy: false });
+  await app.register(cors, { origin: isDev });
+  await app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
 /* Routes registration                                                        */
 /* -------------------------------------------------------------------------- */
-async function registerRoutes(server: FastifyInstance): Promise<void> {
-  // Register route collections sequentially to preserve encapsulation order
-  await server.register(authRoutes);
-  await server.register(webhookRoutes);
-  await server.register(jobRoutes);
-
-  server.get("/health", healthHandler);
+async function registerRoutes(app: FastifyInstance): Promise<void> {
+  // Register routes in the order they should be mounted
+  await app.register(authRoutes);
+  await app.register(webhookRoutes);
+  await app.register(jobRoutes);
+  app.get("/health", healthHandler);
 }
 
 /** Health‑check endpoint */
 function healthHandler(
   _req: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ): FastifyReply {
   return reply.send({
     status: "healthy",
@@ -84,44 +80,53 @@ function healthHandler(
 /* -------------------------------------------------------------------------- */
 /* Centralized error handling                                                 */
 /* -------------------------------------------------------------------------- */
-app.setErrorHandler(
-  (
-    error: FastifyError & { validation?: unknown },
-    _req: FastifyRequest,
-    reply: FastifyReply
-  ) => {
-    app.log.error(error);
+function setErrorHandler(app: FastifyInstance): void {
+  app.setErrorHandler(
+    (
+      error: FastifyError & { validation?: unknown },
+      _req: FastifyRequest,
+      reply: FastifyReply,
+    ) => {
+      app.log.error(error);
 
-    if (error.validation) {
-      return reply.status(400).send({
-        error: "Validation error",
-        details: error.validation,
-      });
-    }
+      if (error.validation) {
+        return reply.status(400).send({
+          error: "Validation error",
+          details: error.validation,
+        });
+      }
 
-    if (error.statusCode) {
-      return reply.status(error.statusCode).send({ error: error.message });
-    }
+      if (error.statusCode) {
+        return reply.status(error.statusCode).send({ error: error.message });
+      }
 
-    return reply.status(500).send({ error: "Internal server error" });
-  }
-);
+      return reply.status(500).send({ error: "Internal server error" });
+    },
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /* Graceful shutdown of external resources                                    */
 /* -------------------------------------------------------------------------- */
-app.addHook("onClose", async () => {
-  try {
-    await queueService.disconnect();
-  } catch (err) {
-    app.log.error(err, "Failed to disconnect queue service");
-  }
-});
+function addShutdownHook(app: FastifyInstance): void {
+  app.addHook("onClose", async () => {
+    try {
+      await queueService.disconnect();
+    } catch (err) {
+      app.log.error(err, "Failed to disconnect queue service");
+    }
+  });
+}
 
 /* -------------------------------------------------------------------------- */
 /* Application bootstrap                                                     */
 /* -------------------------------------------------------------------------- */
 async function start(): Promise<void> {
+  const app = createApp();
+
+  setErrorHandler(app);
+  addShutdownHook(app);
+
   try {
     await registerPlugins(app);
     await registerRoutes(app);
@@ -139,39 +144,34 @@ async function start(): Promise<void> {
     app.log.error(err, "Failed to start application");
     process.exit(1);
   }
-}
 
-/* -------------------------------------------------------------------------- */
-/* Process signal handling                                                    */
-/* -------------------------------------------------------------------------- */
-async function handleSignal(signal: NodeJS.Signals): Promise<void> {
-  app.log.info(`Received ${signal} – shutting down`);
-  try {
-    await app.close();
-    process.exit(0);
-  } catch (err) {
-    app.log.error(err, "Error during graceful shutdown");
-    process.exit(1);
-  }
+  // Process signals
+  const handleSignal = async (signal: NodeJS.Signals): Promise<void> => {
+    app.log.info(`Received ${signal} – shutting down`);
+    try {
+      await app.close();
+      process.exit(0);
+    } catch (err) {
+      app.log.error(err, "Error during graceful shutdown");
+      process.exit(1);
+    }
+  };
+
+  process.once("SIGTERM", () => void handleSignal("SIGTERM"));
+  process.once("SIGINT", () => void handleSignal("SIGINT"));
 }
 
 /* -------------------------------------------------------------------------- */
 /* Global error handling                                                      */
 /* -------------------------------------------------------------------------- */
 process.on("unhandledRejection", (reason) => {
-  app.log.error({ reason }, "Unhandled promise rejection");
+  console.error({ reason }, "Unhandled promise rejection");
 });
 
 process.on("uncaughtException", (err) => {
-  app.log.error(err, "Uncaught exception");
+  console.error(err, "Uncaught exception");
   process.exit(1);
 });
-
-/* -------------------------------------------------------------------------- */
-/* Signal listeners                                                            */
-/* -------------------------------------------------------------------------- */
-process.once("SIGTERM", () => void handleSignal("SIGTERM"));
-process.once("SIGINT", () => void handleSignal("SIGINT"));
 
 /* -------------------------------------------------------------------------- */
 /* Entry point                                                                */
