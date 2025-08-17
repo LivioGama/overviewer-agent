@@ -4,6 +4,7 @@ import Fastify, {
   FastifyError,
   FastifyReply,
   FastifyRequest,
+  FastifyLoggerOptions,
 } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -20,7 +21,7 @@ import { queueService } from "./services/queue";
 /* -------------------------------------------------------------------------- */
 const isDev = env.NODE_ENV === "development";
 
-const loggerConfig = {
+const loggerConfig: FastifyLoggerOptions = {
   level: env.LOG_LEVEL,
   ...(isDev && {
     transport: {
@@ -31,80 +32,89 @@ const loggerConfig = {
       },
     },
   }),
-} as const;
+};
 
 /* -------------------------------------------------------------------------- */
 /* Fastify instance creation                                                  */
 /* -------------------------------------------------------------------------- */
-const fastify: FastifyInstance = Fastify({ logger: loggerConfig });
+const app: FastifyInstance = Fastify({ logger: loggerConfig });
 
 /* -------------------------------------------------------------------------- */
 /* Plugins registration                                                       */
 /* -------------------------------------------------------------------------- */
-async function registerPlugins(app: FastifyInstance): Promise<void> {
-  await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: isDev });
-  await app.register(rateLimit, {
-    max: env.RATE_LIMIT_MAX,
-    timeWindow: env.RATE_LIMIT_WINDOW,
-  });
+async function registerPlugins(server: FastifyInstance): Promise<void> {
+  try {
+    await server.register(helmet, { contentSecurityPolicy: false });
+    await server.register(cors, { origin: isDev });
+    await server.register(rateLimit, {
+      max: env.RATE_LIMIT_MAX,
+      timeWindow: env.RATE_LIMIT_WINDOW,
+    });
+  } catch (err) {
+    server.log.error(err, "Failed to register plugins");
+    throw err;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
 /* Routes registration                                                        */
 /* -------------------------------------------------------------------------- */
-async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await Promise.all([
-    app.register(authRoutes),
-    app.register(webhookRoutes),
-    app.register(jobRoutes),
-  ]);
+async function registerRoutes(server: FastifyInstance): Promise<void> {
+  // Register route collections sequentially to preserve encapsulation order
+  await server.register(authRoutes);
+  await server.register(webhookRoutes);
+  await server.register(jobRoutes);
 
-  app.get(
-    "/health",
-    async (_req: FastifyRequest, reply: FastifyReply) => {
-      reply.send({
-        status: "healthy",
-        timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version ?? "0.1.0",
-        environment: env.NODE_ENV,
-      });
-    }
-  );
+  server.get("/health", healthHandler);
+}
+
+/** Health‑check endpoint */
+function healthHandler(
+  _req: FastifyRequest,
+  reply: FastifyReply
+): FastifyReply {
+  return reply.send({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version ?? "0.1.0",
+    environment: env.NODE_ENV,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
 /* Centralized error handling                                                 */
 /* -------------------------------------------------------------------------- */
-fastify.setErrorHandler(
-  (error: FastifyError & { validation?: unknown }, _req: FastifyRequest, reply: FastifyReply) => {
-    fastify.log.error(error);
+app.setErrorHandler(
+  (
+    error: FastifyError & { validation?: unknown },
+    _req: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    app.log.error(error);
 
     if (error.validation) {
-      reply.status(400).send({
+      return reply.status(400).send({
         error: "Validation error",
         details: error.validation,
       });
-      return;
     }
 
     if (error.statusCode) {
-      reply.status(error.statusCode).send({ error: error.message });
-      return;
+      return reply.status(error.statusCode).send({ error: error.message });
     }
 
-    reply.status(500).send({ error: "Internal server error" });
+    return reply.status(500).send({ error: "Internal server error" });
   }
 );
 
 /* -------------------------------------------------------------------------- */
 /* Graceful shutdown of external resources                                    */
 /* -------------------------------------------------------------------------- */
-fastify.addHook("onClose", async () => {
+app.addHook("onClose", async () => {
   try {
     await queueService.disconnect();
   } catch (err) {
-    fastify.log.error(err, "Failed to disconnect queue service");
+    app.log.error(err, "Failed to disconnect queue service");
   }
 });
 
@@ -113,20 +123,20 @@ fastify.addHook("onClose", async () => {
 /* -------------------------------------------------------------------------- */
 async function start(): Promise<void> {
   try {
-    await registerPlugins(fastify);
-    await registerRoutes(fastify);
+    await registerPlugins(app);
+    await registerRoutes(app);
     await queueService.createConsumerGroup();
 
-    const address = await fastify.listen({
+    const address = await app.listen({
       host: "0.0.0.0",
       port: env.PORT,
     });
 
-    fastify.log.info(`Server listening at ${address}`);
-    fastify.log.info(`Environment: ${env.NODE_ENV}`);
-    fastify.log.info(`Log level: ${env.LOG_LEVEL}`);
+    app.log.info(`Server listening at ${address}`);
+    app.log.info(`Environment: ${env.NODE_ENV}`);
+    app.log.info(`Log level: ${env.LOG_LEVEL}`);
   } catch (err) {
-    fastify.log.error(err, "Failed to start application");
+    app.log.error(err, "Failed to start application");
     process.exit(1);
   }
 }
@@ -135,12 +145,12 @@ async function start(): Promise<void> {
 /* Process signal handling                                                    */
 /* -------------------------------------------------------------------------- */
 async function handleSignal(signal: NodeJS.Signals): Promise<void> {
-  fastify.log.info(`Received ${signal} – shutting down`);
+  app.log.info(`Received ${signal} – shutting down`);
   try {
-    await fastify.close();
+    await app.close();
     process.exit(0);
   } catch (err) {
-    fastify.log.error(err, "Error during graceful shutdown");
+    app.log.error(err, "Error during graceful shutdown");
     process.exit(1);
   }
 }
@@ -149,11 +159,11 @@ async function handleSignal(signal: NodeJS.Signals): Promise<void> {
 /* Global error handling                                                      */
 /* -------------------------------------------------------------------------- */
 process.on("unhandledRejection", (reason) => {
-  fastify.log.error({ reason }, "Unhandled promise rejection");
+  app.log.error({ reason }, "Unhandled promise rejection");
 });
 
 process.on("uncaughtException", (err) => {
-  fastify.log.error(err, "Uncaught exception");
+  app.log.error(err, "Uncaught exception");
   process.exit(1);
 });
 
