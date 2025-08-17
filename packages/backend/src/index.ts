@@ -1,3 +1,4 @@
+```ts
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -75,7 +76,13 @@ const start = async () => {
       });
     });
 
-    await queueService.createConsumerGroup();
+    // Initialise the queue consumer group; fail fast if it cannot be created.
+    try {
+      await queueService.createConsumerGroup();
+    } catch (queueErr) {
+      fastify.log.error(queueErr, "Failed to create queue consumer group");
+      process.exit(1);
+    }
 
     const address = await fastify.listen({
       port: env.PORT,
@@ -106,5 +113,14 @@ const shutdown = async (signal: string) => {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("uncaughtException", (err) => {
+  fastify.log.error(err, "Uncaught exception");
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  fastify.log.error(reason, "Unhandled promise rejection");
+  process.exit(1);
+});
 
 start();
+```
