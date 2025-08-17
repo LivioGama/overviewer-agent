@@ -1,3 +1,4 @@
+import { createRequire } from "module";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -7,6 +8,17 @@ import { authRoutes } from "./routes/auth.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { queueService } from "./services/queue.js";
+
+const require = createRequire(import.meta.url);
+let packageVersion = "0.1.0";
+try {
+  const pkg = require("../package.json");
+  if (pkg && typeof pkg.version === "string") {
+    packageVersion = pkg.version;
+  }
+} catch (_) {
+
+}
 
 const fastify = Fastify({
   logger:
@@ -49,7 +61,7 @@ const start = async () => {
       return reply.send({
         status: "healthy",
         timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version || "0.1.0",
+        version: process.env.npm_package_version || packageVersion,
         environment: env.NODE_ENV,
       });
     });
