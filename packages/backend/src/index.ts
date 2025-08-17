@@ -54,28 +54,33 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
 /* Routes registration                                                        */
 /* -------------------------------------------------------------------------- */
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await app.register(authRoutes);
-  await app.register(webhookRoutes);
-  await app.register(jobRoutes);
+  await Promise.all([
+    app.register(authRoutes),
+    app.register(webhookRoutes),
+    app.register(jobRoutes),
+  ]);
 
-  app.get("/health", async (_, reply: FastifyReply) => {
-    reply.send({
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version ?? "0.1.0",
-      environment: env.NODE_ENV,
-    });
-  });
+  app.get(
+    "/health",
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      reply.send({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version ?? "0.1.0",
+        environment: env.NODE_ENV,
+      });
+    }
+  );
 }
 
 /* -------------------------------------------------------------------------- */
 /* Centralized error handling                                                 */
 /* -------------------------------------------------------------------------- */
 fastify.setErrorHandler(
-  (error: FastifyError, _request: FastifyRequest, reply: FastifyReply) => {
+  (error: FastifyError & { validation?: unknown }, _req: FastifyRequest, reply: FastifyReply) => {
     fastify.log.error(error);
 
-    if ("validation" in error && error.validation) {
+    if (error.validation) {
       reply.status(400).send({
         error: "Validation error",
         details: error.validation,
@@ -96,7 +101,11 @@ fastify.setErrorHandler(
 /* Graceful shutdown of external resources                                    */
 /* -------------------------------------------------------------------------- */
 fastify.addHook("onClose", async () => {
-  await queueService.disconnect();
+  try {
+    await queueService.disconnect();
+  } catch (err) {
+    fastify.log.error(err, "Failed to disconnect queue service");
+  }
 });
 
 /* -------------------------------------------------------------------------- */
@@ -126,19 +135,19 @@ async function start(): Promise<void> {
 /* Process signal handling                                                    */
 /* -------------------------------------------------------------------------- */
 async function handleSignal(signal: NodeJS.Signals): Promise<void> {
-  fastify.log.info(`Received ${signal}, shutting down gracefully`);
+  fastify.log.info(`Received ${signal} – shutting down`);
   try {
     await fastify.close();
     process.exit(0);
-  } catch (e) {
-    fastify.log.error(e, "Error during shutdown");
+  } catch (err) {
+    fastify.log.error(err, "Error during graceful shutdown");
     process.exit(1);
   }
 }
 
-process.once("SIGTERM", () => void handleSignal("SIGTERM"));
-process.once("SIGINT", () => void handleSignal("SIGINT"));
-
+/* -------------------------------------------------------------------------- */
+/* Global error handling                                                      */
+/* -------------------------------------------------------------------------- */
 process.on("unhandledRejection", (reason) => {
   fastify.log.error({ reason }, "Unhandled promise rejection");
 });
@@ -147,6 +156,12 @@ process.on("uncaughtException", (err) => {
   fastify.log.error(err, "Uncaught exception");
   process.exit(1);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Signal listeners                                                            */
+/* -------------------------------------------------------------------------- */
+process.once("SIGTERM", () => void handleSignal("SIGTERM"));
+process.once("SIGINT", () => void handleSignal("SIGINT"));
 
 /* -------------------------------------------------------------------------- */
 /* Entry point                                                                */
