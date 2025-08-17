@@ -65,7 +65,7 @@ export abstract class BaseTask {
     }
   }
 
-  private async findFilesToImprove(): Promise<string[]> {
+  protected async findFilesToImprove(): Promise<string[]> {
     const extensions = [".ts", ".js", ".tsx", ".jsx"];
     const files: string[] = [];
 
@@ -162,7 +162,7 @@ export abstract class BaseTask {
     }
   }
 
-  private hasGoodQuality(content: string): boolean {
+  protected hasGoodQuality(content: string): boolean {
     const qualityIndicators = [
       /\/\*\*[\s\S]*?\*\//g,
       /interface\s+\w+/g,
@@ -173,7 +173,7 @@ export abstract class BaseTask {
     return qualityIndicators.some((pattern) => pattern.test(content));
   }
 
-  private isImprovement(original: string, improved: string): boolean {
+  protected isImprovement(original: string, improved: string): boolean {
     return (
       improved.length > original.length * 0.8 &&
       improved.length < original.length * 1.5 &&

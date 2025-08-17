@@ -55,7 +55,7 @@ export class CodeQualityTask extends BaseTask {
     };
   }
 
-  private async findFilesToImprove(): Promise<string[]> {
+  protected async findFilesToImprove(): Promise<string[]> {
     const extensions = [".ts", ".js", ".tsx", ".jsx", ".py"];
     const files: string[] = [];
 
@@ -116,7 +116,7 @@ export class CodeQualityTask extends BaseTask {
     return false;
   }
 
-  private hasGoodQuality(content: string): boolean {
+  protected hasGoodQuality(content: string): boolean {
     const qualityIndicators = [
       /\/\*\*[\s\S]*?\*\//g,
       /^\s*\/\/[^\/]/gm,
@@ -134,7 +134,7 @@ export class CodeQualityTask extends BaseTask {
     return indicators / lines > 0.1;
   }
 
-  private isImprovement(original: string, improved: string): boolean {
+  protected isImprovement(original: string, improved: string): boolean {
     if (improved.length < 50) {
       return false;
     }
