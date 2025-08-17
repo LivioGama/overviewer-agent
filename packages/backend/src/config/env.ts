@@ -1,15 +1,15 @@
 ```ts
-import { validateEnv } from "./shared";
 import { z } from "zod";
+import { validateEnv } from "./shared";
 
-const EnvSchema = z
+const envSchema = z
   .object({
-    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+    NODE_ENV: z.enum(["development", "production", "test"] as const).default("development"),
+
+    // Convert string -> number, then validate
     PORT: z
-      .string()
-      .transform(Number)
-      .pipe(z.number().int().positive())
-      .default("3001"),
+      .preprocess((val) => Number(val), z.number().int().positive())
+      .default(3001),
 
     GITHUB_APP_ID: z.string().min(1),
     GITHUB_APP_PRIVATE_KEY: z.string().min(1),
@@ -27,26 +27,27 @@ const EnvSchema = z
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
 
-    LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
+    LOG_LEVEL: z.enum(["error", "warn", "info", "debug"] as const).default("info"),
 
     RATE_LIMIT_MAX: z
-      .string()
-      .transform(Number)
-      .pipe(z.number().int().positive())
-      .default("100"),
+      .preprocess((val) => Number(val), z.number().int().positive())
+      .default(100),
+
     RATE_LIMIT_WINDOW: z.string().default("1 minute"),
   })
   .strict();
 
-let env: z.infer<typeof EnvSchema>;
+type Env = z.infer<typeof envSchema>;
+
+let env: Env;
 
 try {
-  env = validateEnv(EnvSchema);
-} catch (err) {
-  // Re‑throw with a clearer message to aid debugging
-  throw new Error(`Environment validation failed: ${(err as Error).message}`);
+  env = validateEnv(envSchema);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  throw new Error(`Environment validation failed: ${message}`);
 }
 
 export { env };
-export type Env = z.infer<typeof EnvSchema>;
+export type { Env };
 ```
