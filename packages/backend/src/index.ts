@@ -62,7 +62,7 @@ function buildLoggerOptions(): FastifyLoggerOptions {
 }
 
 /*───────────────────────────────────────────────────────────────
- * Application factory
+ * Fastify instance factory
  *───────────────────────────────────────────────────────────────*/
 
 function createApp(): FastifyInstance {
@@ -70,7 +70,7 @@ function createApp(): FastifyInstance {
 }
 
 /*───────────────────────────────────────────────────────────────
- * Plugins
+ * Plugins registration
  *───────────────────────────────────────────────────────────────*/
 
 const registerPlugins: FastifyPluginAsync = async (app) => {
@@ -83,7 +83,7 @@ const registerPlugins: FastifyPluginAsync = async (app) => {
 };
 
 /*───────────────────────────────────────────────────────────────
- * Routes
+ * Routes registration
  *───────────────────────────────────────────────────────────────*/
 
 async function healthHandler(
@@ -96,7 +96,7 @@ async function healthHandler(
     version: process.env.npm_package_version ?? '0.1.0',
     environment: env.NODE_ENV,
   };
-  await reply.code(200).send(payload);
+  reply.code(200).send(payload);
 }
 
 const registerRoutes: FastifyPluginAsync = async (app) => {
@@ -116,24 +116,25 @@ function setErrorHandler(app: FastifyInstance): void {
       app.log.error(error);
 
       if (error.validation) {
-        void reply
-          .code(400)
-          .send({ error: 'Validation error', details: error.validation });
+        reply.code(400).send({
+          error: 'Validation error',
+          details: error.validation,
+        });
         return;
       }
 
       if (error.statusCode && error.message) {
-        void reply.code(error.statusCode).send({ error: error.message });
+        reply.code(error.statusCode).send({ error: error.message });
         return;
       }
 
-      void reply.code(500).send({ error: 'Internal server error' });
+      reply.code(500).send({ error: 'Internal server error' });
     },
   );
 }
 
 /*───────────────────────────────────────────────────────────────
- * Graceful shutdown
+ * Graceful shutdown utilities
  *───────────────────────────────────────────────────────────────*/
 
 async function closeQueue(app: FastifyInstance): Promise<void> {
@@ -152,16 +153,8 @@ async function closeServer(app: FastifyInstance): Promise<void> {
   }
 }
 
-/** Executes all shutdown tasks, logging any failures. */
 async function shutdown(app: FastifyInstance): Promise<void> {
-  const tasks = [closeQueue(app), closeServer(app)];
-  const results = await Promise.allSettled(tasks);
-
-  for (const result of results) {
-    if (result.status === 'rejected') {
-      app.log.error({ err: result.reason }, 'Shutdown task failed');
-    }
-  }
+  await Promise.allSettled([closeQueue(app), closeServer(app)]);
 }
 
 /*───────────────────────────────────────────────────────────────
@@ -191,14 +184,12 @@ function bindProcessErrorHandlers(app: FastifyInstance): void {
 
   process.once('uncaughtException', (err) => {
     app.log.error(err, 'Uncaught exception – terminating');
-    void app
-      .close()
-      .finally(() => process.exit(1));
+    void app.close().finally(() => process.exit(1));
   });
 }
 
 /*───────────────────────────────────────────────────────────────
- * Bootstrap
+ * Application bootstrap
  *───────────────────────────────────────────────────────────────*/
 
 async function bootstrap(): Promise<void> {
@@ -220,7 +211,7 @@ async function bootstrap(): Promise<void> {
 
     bindSignalHandlers(app);
   } catch (error) {
-    // Logger might not be initialised – fallback to console.
+    // Logger may not be fully initialised – fall back to console.
     const logger = (app?.log ?? console) as {
       error: (obj: unknown, msg?: string) => void;
     };
