@@ -1,3 +1,4 @@
+```ts
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -45,7 +46,9 @@ export const issues = pgTable("issues", {
   issueBody: text("issue_body"),
   analysisResult: jsonb("analysis_result"),
   status: varchar("status", { length: 50 }).default("pending").notNull(),
-  assignedJobId: uuid("assigned_job_id").references(() => jobs.id),
+  assignedJobId: uuid("assigned_job_id")
+    .references(() => jobs.id, { onDelete: "set null" })
+    .nullable(),
   createdAt: timestamp("created_at")
     .default(sql`NOW()`)
     .notNull(),
@@ -60,7 +63,7 @@ export const prReviews = pgTable("pr_reviews", {
     .default(sql`gen_random_uuid()`),
   jobId: uuid("job_id")
     .notNull()
-    .references(() => jobs.id),
+    .references(() => jobs.id, { onDelete: "cascade" }),
   prNumber: integer("pr_number").notNull(),
   reviewResult: jsonb("review_result"),
   approved: boolean("approved").default(false),
@@ -110,3 +113,4 @@ export type Installation = typeof installations.$inferSelect;
 export type InstallationInsert = typeof installations.$inferInsert;
 export type Policy = typeof policies.$inferSelect;
 export type PolicyInsert = typeof policies.$inferInsert;
+```

@@ -1,12 +1,13 @@
+```ts
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
-import { env } from "./config/env.js";
-import { authRoutes } from "./routes/auth.js";
-import { jobRoutes } from "./routes/jobs.js";
-import { webhookRoutes } from "./routes/webhooks.js";
-import { queueService } from "./services/queue.js";
+import { env } from "./apps/backend/config/env.js";
+import { authRoutes } from "./apps/backend/routes/auth.js";
+import { jobRoutes } from "./apps/backend/routes/jobs.js";
+import { webhookRoutes } from "./apps/backend/routes/webhooks.js";
+import { queueService } from "./apps/backend/services/queue.js";
 
 const fastify = Fastify({
   logger:
@@ -108,3 +109,4 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 start();
+```
