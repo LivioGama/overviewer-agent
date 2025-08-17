@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { Job } from "@ollama-turbo-agent/shared";
 import axios from "axios";
+import crypto from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { createClient, RedisClientType } from "redis";
@@ -190,8 +191,6 @@ export class RunnerService {
   }
 
   private createJWT(appId: string, privateKey: string): string {
-    const crypto = require("crypto");
-
     const now = Math.floor(Date.now() / 1000);
     const payload = {
       iat: now - 60,
