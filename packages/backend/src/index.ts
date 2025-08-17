@@ -4,12 +4,12 @@
  *───────────────────────────────────────────────────────────────*/
 
 import Fastify, {
-  type FastifyInstance,
-  type FastifyError,
-  type FastifyReply,
-  type FastifyRequest,
-  type FastifyLoggerOptions,
-  type FastifyPluginAsync,
+  FastifyInstance,
+  FastifyError,
+  FastifyReply,
+  FastifyRequest,
+  FastifyLoggerOptions,
+  FastifyPluginAsync,
 } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -30,7 +30,7 @@ enum TermSignal {
   SIGTERM = 'SIGTERM',
 }
 
-/** Payload returned by the health‑check endpoint. */
+/** Payload for the health‑check endpoint. */
 interface HealthResponse {
   status: 'healthy';
   timestamp: string;
@@ -45,22 +45,23 @@ interface HealthResponse {
 function buildLoggerOptions(): FastifyLoggerOptions {
   const base = { level: env.LOG_LEVEL } as const;
 
-  if (env.NODE_ENV !== 'development') return base;
-
-  return {
-    ...base,
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
-      },
-    },
-  };
+  // Enable pretty printing only in development.
+  return env.NODE_ENV === 'development'
+    ? {
+        ...base,
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
+        },
+      }
+    : base;
 }
 
 /*───────────────────────────────────────────────────────────────
- * Fastify instance factory
+ * Fastify application factory
  *───────────────────────────────────────────────────────────────*/
 
 function createApp(): FastifyInstance {
@@ -105,20 +106,16 @@ const registerRoutes: FastifyPluginAsync = async (app) => {
 };
 
 /*───────────────────────────────────────────────────────────────
- * Error handling
+ * Centralised error handling
  *───────────────────────────────────────────────────────────────*/
-
-function isFastifyError(err: unknown): err is FastifyError {
-  return typeof err === 'object' && err != null && 'statusCode' in err;
-}
 
 function setErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler(
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Validation errors from fastify-schema
-      if ('validation' in error && error.validation) {
+      // Validation errors from Fastify schema
+      if (error.validation) {
         reply.status(400).send({
           error: 'Validation error',
           details: error.validation,
@@ -126,20 +123,20 @@ function setErrorHandler(app: FastifyInstance): void {
         return;
       }
 
-      // FastifyError with explicit statusCode
-      if (isFastifyError(error) && error.statusCode) {
+      // Any FastifyError that carries a statusCode
+      if ('statusCode' in error && typeof error.statusCode === 'number') {
         reply.status(error.statusCode).send({ error: error.message });
         return;
       }
 
-      // Fallback
+      // Fallback – unexpected error
       reply.status(500).send({ error: 'Internal server error' });
     },
   );
 }
 
 /*───────────────────────────────────────────────────────────────
- * Graceful shutdown helpers
+ * Graceful shutdown utilities
  *───────────────────────────────────────────────────────────────*/
 
 async function closeQueue(app: FastifyInstance): Promise<void> {
@@ -150,6 +147,7 @@ async function closeQueue(app: FastifyInstance): Promise<void> {
   }
 }
 
+/** Register an `onClose` hook that takes care of background resources. */
 function attachCloseHook(app: FastifyInstance): void {
   app.addHook('onClose', async () => {
     await closeQueue(app);
@@ -157,18 +155,19 @@ function attachCloseHook(app: FastifyInstance): void {
 }
 
 /*───────────────────────────────────────────────────────────────
- * Signal handling
+ * Process signal handling
  *───────────────────────────────────────────────────────────────*/
 
 function bindSignalHandlers(app: FastifyInstance): void {
   const shutdown = async (signal: TermSignal) => {
     app.log.info(`Received ${signal} – shutting down gracefully`);
-    await app.close(); // triggers onClose hook
+    await app.close(); // Triggers the `onClose` hook
     process.exit(0);
   };
 
-  for (const sig of Object.values(TermSignal)) {
-    process.once(sig, () => void shutdown(sig));
+  // `once` ensures the handler is executed only for the first signal.
+  for (const signal of Object.values(TermSignal)) {
+    process.once(signal, () => void shutdown(signal));
   }
 }
 
@@ -188,30 +187,39 @@ function bindProcessErrorHandlers(app: FastifyInstance): void {
 }
 
 /*───────────────────────────────────────────────────────────────
- * Application bootstrap
+ * Bootstrap
  *───────────────────────────────────────────────────────────────*/
 
 async function bootstrap(): Promise<void> {
   const app = createApp();
 
   try {
+    // Register core plugins and routes
     await app.register(registerPlugins);
     await app.register(registerRoutes);
+
+    // Global error handling & lifecycle hooks
     setErrorHandler(app);
     attachCloseHook(app);
     bindProcessErrorHandlers(app);
 
+    // Initialise background services before the server starts listening
     await queueService.createConsumerGroup();
+
     await app.ready();
 
-    const address = await app.listen({ host: '0.0.0.0', port: env.PORT });
+    const address = await app.listen({
+      host: '0.0.0.0',
+      port: env.PORT,
+    });
+
     app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
     app.log.info(`Environment: ${env.NODE_ENV}`);
     app.log.info(`Log level: ${env.LOG_LEVEL}`);
 
     bindSignalHandlers(app);
   } catch (err) {
-    // If logger is not ready, fall back to console.
+    // Fallback to console if logger hasn't been initialised.
     const logger = (app?.log ?? console) as {
       error: (obj: unknown, msg?: string) => void;
     };
