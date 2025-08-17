@@ -1,10 +1,18 @@
 ```ts
-import { and, desc, eq, gt, count as sqlCount } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  count as sqlCount,
+  type SQL,
+} from "drizzle-orm";
 import type {
   FastifyInstance,
   FastifyReply,
   FastifyRequest,
   RouteHandlerMethod,
+  preValidationHookHandler,
 } from "fastify";
 
 import { db } from "../database/connection.js";
@@ -36,12 +44,23 @@ enum JobStatus {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                               Request Augmentation                         */
+/* -------------------------------------------------------------------------- */
+
+declare module "fastify" {
+  interface FastifyRequest {
+    /** Installation id is guaranteed to be a number after `validateInstallationId`. */
+    installationId: number;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /*                               Helper Utils                                 */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Safely parses a numeric string/number to integer.
- * Returns `null` if parsing fails.
+ * Safely parses a numeric string or number to an integer.
+ * Returns `null` when parsing fails.
  */
 function toInt(value: string | number): number | null {
   const num = typeof value === "number" ? value : Number.parseInt(value, 10);
@@ -49,36 +68,22 @@ function toInt(value: string | number): number | null {
 }
 
 /**
- * Returns a reusable Fastify `preHandler` that validates and converts
- * `installationId` param to a number, exposing it as `request.installationId`.
+ * Fastify pre‑handler that validates `installationId` URL param and decorates
+ * the request with a numeric `installationId` property.
  */
-function validateInstallationId<
-  Params extends InstallationParams,
-  Query = unknown,
-  Body = unknown,
-  Headers = unknown,
->() {
-  return async (
-    request: FastifyRequest<{
-      Params: Params;
-      Querystring: Query;
-      Body: Body;
-      Headers: Headers;
-    }>,
-    reply: FastifyReply,
-  ) => {
-    const id = toInt(request.params.installationId);
-    if (id === null) {
-      reply.code(400).send({ error: "Invalid installationId" });
-      return;
-    }
-    // @ts-expect-error – augment request for downstream handlers
-    request.installationId = id;
-  };
-}
+const validateInstallationId: preValidationHookHandler<{
+  Params: InstallationParams;
+}> = async (request, reply) => {
+  const id = toInt(request.params.installationId);
+  if (id === null) {
+    reply.code(400).send({ error: "Invalid installationId" });
+    return;
+  }
+  request.installationId = id;
+};
 
 /**
- * Retrieves a job belonging to the validated installation.
+ * Retrieves a job belonging to the provided installation.
  */
 async function getJob(
   installationId: number,
@@ -93,13 +98,13 @@ async function getJob(
 }
 
 /**
- * Constructs filters for job queries based on optional parameters.
+ * Builds an array of SQL filters for job queries.
  */
 function jobFilters(
   installationId: number,
   query: JobsQuery,
-) {
-  const filters = [eq(jobs.installationId, installationId)] as const;
+): SQL[] {
+  const filters: SQL[] = [eq(jobs.installationId, installationId)];
 
   if (query.status) filters.push(eq(jobs.status, query.status));
   if (query.repoOwner) filters.push(eq(jobs.repoOwner, query.repoOwner));
@@ -109,43 +114,56 @@ function jobFilters(
 }
 
 /* -------------------------------------------------------------------------- */
+/*                               Schemas (Fastify)                           */
+/* -------------------------------------------------------------------------- */
+
+const installationParamsSchema = {
+  type: "object",
+  properties: { installationId: { type: "string" } },
+  required: ["installationId"],
+} as const;
+
+const jobParamsSchema = {
+  type: "object",
+  properties: {
+    installationId: { type: "string" },
+    jobId: { type: "string" },
+  },
+  required: ["installationId", "jobId"],
+} as const;
+
+const jobsQuerySchema = {
+  type: "object",
+  properties: {
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+    offset: { type: "integer", minimum: 0, default: 0 },
+    status: { type: "string", enum: Object.values(JobStatus) },
+    repoOwner: { type: "string" },
+    repoName: { type: "string" },
+  },
+} as const;
+
+/* -------------------------------------------------------------------------- */
 /*                               Route Handlers                                */
 /* -------------------------------------------------------------------------- */
 
 export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
   const basePath = "/installations/:installationId";
+  const commonPreHandlers = [authenticateInstallation, validateInstallationId];
 
-  /* ------------------------------- LIST ----------------------------------- */
+  /** LIST jobs */
   fastify.get<{
     Params: InstallationParams;
     Querystring: JobsQuery;
   }>(`${basePath}/jobs`, {
-    preHandler: [authenticateInstallation, validateInstallationId()],
+    preHandler: commonPreHandlers,
     schema: {
-      params: {
-        type: "object",
-        properties: { installationId: { type: "string" } },
-        required: ["installationId"],
-      },
-      querystring: {
-        type: "object",
-        properties: {
-          limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
-          offset: { type: "integer", minimum: 0, default: 0 },
-          status: {
-            type: "string",
-            enum: Object.values(JobStatus),
-          },
-          repoOwner: { type: "string" },
-          repoName: { type: "string" },
-        },
-      },
+      params: installationParamsSchema,
+      querystring: jobsQuerySchema,
     },
   } as RouteHandlerMethod, async (req, reply) => {
-    const installationId = (req as any).installationId as number;
     const { limit = 20, offset = 0 } = req.query;
-
-    const filters = jobFilters(installationId, req.query);
+    const filters = jobFilters(req.installationId, req.query);
 
     const [jobsRows, [{ total }]] = await Promise.all([
       db
@@ -165,95 +183,63 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     reply.send({ jobs: jobsRows, pagination: { limit, offset, total } });
   });
 
-  /* -------------------------------- GET ONE ------------------------------ */
+  /** GET single job */
   fastify.get<{
     Params: JobParams;
   }>(`${basePath}/jobs/:jobId`, {
-    preHandler: [authenticateInstallation, validateInstallationId()],
-    schema: {
-      params: {
-        type: "object",
-        properties: {
-          installationId: { type: "string" },
-          jobId: { type: "string" },
-        },
-        required: ["installationId", "jobId"],
-      },
-    },
+    preHandler: commonPreHandlers,
+    schema: { params: jobParamsSchema },
   } as RouteHandlerMethod, async (req, reply) => {
-    const installationId = (req as any).installationId as number;
-    const { jobId } = req.params;
-
-    const job = await getJob(installationId, jobId);
+    const job = await getJob(req.installationId, req.params.jobId);
     if (!job) {
       reply.code(404).send({ error: "Job not found" });
       return;
     }
-
     reply.send({ job });
   });
 
-  /* ------------------------------- CANCEL -------------------------------- */
+  /** CANCEL job */
   fastify.post<{
     Params: JobParams;
   }>(`${basePath}/jobs/:jobId/cancel`, {
-    preHandler: [authenticateInstallation, validateInstallationId()],
-    schema: {
-      params: {
-        type: "object",
-        properties: {
-          installationId: { type: "string" },
-          jobId: { type: "string" },
-        },
-        required: ["installationId", "jobId"],
-      },
-    },
+    preHandler: commonPreHandlers,
+    schema: { params: jobParamsSchema },
   } as RouteHandlerMethod, async (req, reply) => {
-    const installationId = (req as any).installationId as number;
-    const { jobId } = req.params;
-
-    const job = await getJob(installationId, jobId);
+    const job = await getJob(req.installationId, req.params.jobId);
     if (!job) {
       reply.code(404).send({ error: "Job not found" });
       return;
     }
 
-    if (![JobStatus.Queued, JobStatus.InProgress].includes(job.status as JobStatus)) {
+    const cancellable = [
+      JobStatus.Queued,
+      JobStatus.InProgress,
+    ] as const;
+
+    if (!cancellable.includes(job.status as typeof cancellable[number])) {
       reply.code(400).send({ error: "Job cannot be cancelled" });
       return;
     }
 
     await Promise.all([
-      queueService.updateJobStatus(jobId, JobStatus.Cancelled),
+      queueService.updateJobStatus(req.params.jobId, JobStatus.Cancelled),
       db
         .update(jobs)
         .set({ status: JobStatus.Cancelled, completedAt: new Date() })
-        .where(eq(jobs.id, jobId)),
+        .where(eq(jobs.id, req.params.jobId)),
     ]);
 
     reply.send({ success: true, message: "Job cancelled" });
   });
 
-  /* --------------------------------- RETRY -------------------------------- */
+  /** RETRY job */
   fastify.post<{
     Params: JobParams;
   }>(`${basePath}/jobs/:jobId/retry`, {
-    preHandler: [authenticateInstallation, validateInstallationId()],
-    schema: {
-      params: {
-        type: "object",
-        properties: {
-          installationId: { type: "string" },
-          jobId: { type: "string" },
-        },
-        required: ["installationId", "jobId"],
-      },
-    },
+    preHandler: commonPreHandlers,
+    schema: { params: jobParamsSchema },
   } as RouteHandlerMethod, async (req, reply) => {
-    const installationId = (req as any).installationId as number;
-    const { jobId } = req.params;
-
-    const job = await getJob(installationId, jobId);
+    const job = await getJob(req.installationId, req.params.jobId);
     if (!job) {
       reply.code(404).send({ error: "Job not found" });
       return;
@@ -264,49 +250,43 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       return;
     }
 
-    await queueService.retryJob(jobId);
+    await queueService.retryJob(req.params.jobId);
     reply.send({ success: true, message: "Job queued for retry" });
   });
 
-  /* --------------------------------- STATS -------------------------------- */
+  /** STATS */
   fastify.get<{
     Params: InstallationParams;
   }>(`${basePath}/stats`, {
-    preHandler: [authenticateInstallation, validateInstallationId()],
-    schema: {
-      params: {
-        type: "object",
-        properties: { installationId: { type: "string" } },
-        required: ["installationId"],
-      },
-    },
+    preHandler: commonPreHandlers,
+    schema: { params: installationParamsSchema },
   } as RouteHandlerMethod, async (req, reply) => {
-    const installationId = (req as any).installationId as number;
-
     const rows = await db
       .select({
         status: jobs.status,
         count: sqlCount(),
       })
       .from(jobs)
-      .where(eq(jobs.installationId, installationId))
+      .where(eq(jobs.installationId, req.installationId))
       .groupBy(jobs.status);
 
-    const stats = {
-      total: 0,
-      [JobStatus.Queued]: 0,
-      [JobStatus.InProgress]: 0,
-      [JobStatus.Completed]: 0,
-      [JobStatus.Failed]: 0,
-      [JobStatus.Cancelled]: 0,
-    };
-
-    for (const { status, count } of rows) {
-      const key = status as keyof typeof stats;
-      const value = Number(count);
-      stats[key] = value;
-      stats.total += value;
-    }
+    const stats = rows.reduce(
+      (acc, { status, count }) => {
+        const key = status as keyof typeof acc;
+        const value = Number(count);
+        acc[key] = value;
+        acc.total += value;
+        return acc;
+      },
+      {
+        total: 0,
+        [JobStatus.Queued]: 0,
+        [JobStatus.InProgress]: 0,
+        [JobStatus.Completed]: 0,
+        [JobStatus.Failed]: 0,
+        [JobStatus.Cancelled]: 0,
+      } as Record<JobStatus | "total", number>,
+    );
 
     reply.send({ stats });
   });
