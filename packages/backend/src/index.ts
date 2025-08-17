@@ -45,20 +45,18 @@ interface HealthResponse {
 function buildLoggerOptions(): FastifyLoggerOptions {
   const base = { level: env.LOG_LEVEL } as const;
 
-  if (env.NODE_ENV === 'development') {
-    return {
-      ...base,
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          translateTime: 'HH:MM:ss Z',
-          ignore: 'pid,hostname',
+  return env.NODE_ENV === 'development'
+    ? {
+        ...base,
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
         },
-      },
-    };
-  }
-
-  return base;
+      }
+    : base;
 }
 
 /*───────────────────────────────────────────────────────────────
@@ -86,10 +84,10 @@ const registerPlugins: FastifyPluginAsync = async (app) => {
  * Routes registration
  *───────────────────────────────────────────────────────────────*/
 
-async function healthHandler(
+const healthHandler = async (
   _req: FastifyRequest,
   reply: FastifyReply,
-): Promise<void> {
+): Promise<void> => {
   const payload: HealthResponse = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -97,7 +95,7 @@ async function healthHandler(
     environment: env.NODE_ENV,
   };
   reply.code(200).send(payload);
-}
+};
 
 const registerRoutes: FastifyPluginAsync = async (app) => {
   await app.register(authRoutes);
@@ -115,7 +113,8 @@ function setErrorHandler(app: FastifyInstance): void {
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      if (error.validation) {
+      // Validation errors from fastify-schema
+      if ('validation' in error && error.validation) {
         reply.code(400).send({
           error: 'Validation error',
           details: error.validation,
@@ -123,11 +122,13 @@ function setErrorHandler(app: FastifyInstance): void {
         return;
       }
 
+      // FastifyError already carries a status code & message
       if (error.statusCode && error.message) {
         reply.code(error.statusCode).send({ error: error.message });
         return;
       }
 
+      // Fallback for unexpected errors
       reply.code(500).send({ error: 'Internal server error' });
     },
   );
@@ -145,16 +146,15 @@ async function closeQueue(app: FastifyInstance): Promise<void> {
   }
 }
 
-async function closeServer(app: FastifyInstance): Promise<void> {
-  try {
-    await app.close();
-  } catch (err) {
-    app.log.error({ err }, 'Failed to close Fastify server');
-  }
-}
-
-async function shutdown(app: FastifyInstance): Promise<void> {
-  await Promise.allSettled([closeQueue(app), closeServer(app)]);
+/**
+ * Fastify’s `onClose` hook runs when `app.close()` is invoked.
+ * We attach the queue cleanup here so that any consumer of `close()`
+ * (including signal handling) gets the same behaviour.
+ */
+function attachCloseHook(app: FastifyInstance): void {
+  app.addHook('onClose', async () => {
+    await closeQueue(app);
+  });
 }
 
 /*───────────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ async function shutdown(app: FastifyInstance): Promise<void> {
 function bindSignalHandlers(app: FastifyInstance): void {
   const handle = async (signal: TermSignal) => {
     app.log.info(`Received ${signal} – initiating graceful shutdown`);
-    await shutdown(app);
+    await app.close(); // triggers `onClose` hook
     process.exit(0);
   };
 
@@ -199,6 +199,7 @@ async function bootstrap(): Promise<void> {
     await app.register(registerPlugins);
     await app.register(registerRoutes);
     setErrorHandler(app);
+    attachCloseHook(app);
     bindProcessErrorHandlers(app);
 
     await queueService.createConsumerGroup();
@@ -211,7 +212,7 @@ async function bootstrap(): Promise<void> {
 
     bindSignalHandlers(app);
   } catch (error) {
-    // Logger may not be fully initialised – fall back to console.
+    // If logger hasn't been initialised, fallback to console.
     const logger = (app?.log ?? console) as {
       error: (obj: unknown, msg?: string) => void;
     };
