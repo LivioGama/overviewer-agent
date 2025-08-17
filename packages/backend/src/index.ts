@@ -22,19 +22,20 @@ import { queueService } from './apps/backend/services/queue.js';
 /*───────────────────────────────────────*/
 /*  Types & Constants                      */
 /*───────────────────────────────────────*/
-
 type Signal = NodeJS.Signals;
 const SIGNALS: readonly Signal[] = ['SIGINT', 'SIGTERM'] as const;
 
 /*───────────────────────────────────────*/
-/*  Server factory                         */
+/*  Logger configuration                    */
 /*───────────────────────────────────────*/
-function buildServer(): FastifyInstance {
-  const isDev = env.NODE_ENV === 'development';
-
-  const logger = {
+function createLoggerConfig() {
+  const base = {
     level: env.LOG_LEVEL,
-    ...(isDev && {
+  } as const;
+
+  if (env.NODE_ENV === 'development') {
+    return {
+      ...base,
       transport: {
         target: 'pino-pretty',
         options: {
@@ -42,10 +43,17 @@ function buildServer(): FastifyInstance {
           ignore: 'pid,hostname',
         },
       },
-    }),
-  };
+    };
+  }
 
-  return Fastify({ logger });
+  return base;
+}
+
+/*───────────────────────────────────────*/
+/*  Server factory                         */
+/*───────────────────────────────────────*/
+function buildServer(): FastifyInstance {
+  return Fastify({ logger: createLoggerConfig() });
 }
 
 /*───────────────────────────────────────*/
@@ -53,7 +61,7 @@ function buildServer(): FastifyInstance {
 /*───────────────────────────────────────*/
 async function registerPlugins(app: FastifyInstance): Promise<void> {
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: isDevelopment() });
+  await app.register(cors, { origin: env.NODE_ENV === 'development' });
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW,
@@ -118,34 +126,35 @@ function setErrorHandler(app: FastifyInstance): void {
 /*  Graceful shutdown helpers              */
 /*───────────────────────────────────────*/
 async function closeResources(app: FastifyInstance): Promise<void> {
-  const results = await Promise.allSettled([
+  const tasks = [
     queueService.disconnect(),
     app.close(),
-  ]);
+  ];
 
-  results.forEach((result) => {
+  const results = await Promise.allSettled(tasks);
+
+  for (const result of results) {
     if (result.status === 'rejected') {
-      // Logging rejected cleanup steps does not abort the shutdown
-      // eslint-disable-next-line no-console
-      console.error('Shutdown task failed:', result.reason);
+      app.log.error({ err: result.reason }, 'Shutdown task failed');
     }
-  });
+  }
 }
 
 /*───────────────────────────────────────*/
 /*  Signal handling                        */
 /*───────────────────────────────────────*/
-async function handleSignal(app: FastifyInstance, signal: Signal): Promise<void> {
+function handleSignal(app: FastifyInstance, signal: Signal): void {
   app.log.info(`Received ${signal}, commencing graceful shutdown`);
-  await closeResources(app);
-  process.exit(0);
+  void closeResources(app).finally(() => process.exit(0));
 }
 
 /*───────────────────────────────────────*/
-/*  Utility helpers                        */
+/*  Graceful‑shutdown registration          */
 /*───────────────────────────────────────*/
-function isDevelopment(): boolean {
-  return env.NODE_ENV === 'development';
+function registerSignalHandlers(app: FastifyInstance): void {
+  for (const sig of SIGNALS) {
+    process.once(sig, () => handleSignal(app, sig));
+  }
 }
 
 /*───────────────────────────────────────*/
@@ -154,7 +163,7 @@ function isDevelopment(): boolean {
 async function bootstrap(): Promise<void> {
   const app = buildServer();
 
-  // Ensure queue service is stopped when Fastify shuts down
+  // Ensure queue service disconnects when Fastify closes
   app.addHook('onClose', async () => {
     await queueService.disconnect();
   });
@@ -174,18 +183,18 @@ async function bootstrap(): Promise<void> {
   app.log.info(`Environment: ${env.NODE_ENV}`);
   app.log.info(`Log level: ${env.LOG_LEVEL}`);
 
-  // Register signal listeners – one‑time handlers only
-  for (const sig of SIGNALS) {
-    process.once(sig, () => void handleSignal(app, sig));
-  }
+  registerSignalHandlers(app);
 }
 
 /*───────────────────────────────────────*/
 /*  Run entry point                        */
 /*───────────────────────────────────────*/
 bootstrap().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
-  console.error('Failed to start server:', err);
+  // Use Fastify logger if possible; fall back to console
+  const logger = typeof console !== 'undefined' ? console : undefined;
+  if (logger?.error) {
+    logger.error('Failed to start server:', err);
+  }
   process.exit(1);
 });
 ```
