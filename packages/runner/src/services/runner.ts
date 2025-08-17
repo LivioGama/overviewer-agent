@@ -30,6 +30,7 @@ export class RunnerService {
 
   async start(): Promise<void> {
     await this.redis.connect();
+    await this.setupRedisConsumerGroup();
     await this.setupWorkspace();
 
     console.log("Runner started, waiting for jobs...");
@@ -54,6 +55,18 @@ export class RunnerService {
 
   async stop(): Promise<void> {
     await this.redis.disconnect();
+  }
+
+  private async setupRedisConsumerGroup(): Promise<void> {
+    try {
+      await this.redis.xGroupCreate("job-queue", "processors", "0", {
+        MKSTREAM: true,
+      });
+    } catch (error: any) {
+      if (!error.message?.includes("BUSYGROUP")) {
+        console.warn("Error creating consumer group:", error.message);
+      }
+    }
   }
 
   private async setupWorkspace(): Promise<void> {

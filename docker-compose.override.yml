@@ -1,0 +1,19 @@
+{
+  "services": {
+    "web": {
+      "networks": {
+        "easypanel": {
+          "aliases": [
+            "liviogama_ollama-turbo-agent_web"
+          ]
+        },
+        "default": null
+      }
+    }
+  },
+  "networks": {
+    "easypanel": {
+      "external": true
+    }
+  }
+}
