@@ -57,7 +57,7 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
 /* Routes registration                                                        */
 /* -------------------------------------------------------------------------- */
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  // Register routes in the order they should be mounted
+  // Order matters – keep public routes before protected ones
   await app.register(authRoutes);
   await app.register(webhookRoutes);
   await app.register(jobRoutes);
@@ -119,6 +119,20 @@ function addShutdownHook(app: FastifyInstance): void {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Signal handling                                                            */
+/* -------------------------------------------------------------------------- */
+async function handleSignal(app: FastifyInstance, signal: NodeJS.Signals) {
+  app.log.info(`Received ${signal} – shutting down`);
+  try {
+    await app.close();
+    process.exit(0);
+  } catch (err) {
+    app.log.error(err, "Error during graceful shutdown");
+    process.exit(1);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Application bootstrap                                                     */
 /* -------------------------------------------------------------------------- */
 async function start(): Promise<void> {
@@ -128,15 +142,13 @@ async function start(): Promise<void> {
   addShutdownHook(app);
 
   try {
-    await registerPlugins(app);
-    await registerRoutes(app);
-    await queueService.createConsumerGroup();
+    await Promise.all([
+      registerPlugins(app),
+      registerRoutes(app),
+      queueService.createConsumerGroup(),
+    ]);
 
-    const address = await app.listen({
-      host: "0.0.0.0",
-      port: env.PORT,
-    });
-
+    const address = await app.listen({ host: "0.0.0.0", port: env.PORT });
     app.log.info(`Server listening at ${address}`);
     app.log.info(`Environment: ${env.NODE_ENV}`);
     app.log.info(`Log level: ${env.LOG_LEVEL}`);
@@ -145,24 +157,13 @@ async function start(): Promise<void> {
     process.exit(1);
   }
 
-  // Process signals
-  const handleSignal = async (signal: NodeJS.Signals): Promise<void> => {
-    app.log.info(`Received ${signal} – shutting down`);
-    try {
-      await app.close();
-      process.exit(0);
-    } catch (err) {
-      app.log.error(err, "Error during graceful shutdown");
-      process.exit(1);
-    }
-  };
-
-  process.once("SIGTERM", () => void handleSignal("SIGTERM"));
-  process.once("SIGINT", () => void handleSignal("SIGINT"));
+  // Process termination signals
+  process.once("SIGTERM", () => void handleSignal(app, "SIGTERM"));
+  process.once("SIGINT", () => void handleSignal(app, "SIGINT"));
 }
 
 /* -------------------------------------------------------------------------- */
-/* Global error handling                                                      */
+/* Global promise/exception handling                                          */
 /* -------------------------------------------------------------------------- */
 process.on("unhandledRejection", (reason) => {
   console.error({ reason }, "Unhandled promise rejection");
