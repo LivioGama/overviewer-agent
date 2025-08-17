@@ -7,11 +7,6 @@ export class GitHubService {
   private appOctokit: Octokit
 
   constructor() {
-    const appAuth = createAppAuth({
-      appId: env.GITHUB_APP_ID,
-      privateKey: env.GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, '\n')
-    })
-
     this.appOctokit = new Octokit({
       authStrategy: createAppAuth,
       auth: {
@@ -51,15 +46,18 @@ export class GitHubService {
   ) {
     const octokit = await this.getInstallationOctokit(installationId)
     
-    return octokit.rest.checks.create({
+    const params: any = {
       owner,
       repo,
       name: options.name,
-      head_sha: options.headSha,
-      status: options.status,
-      conclusion: options.conclusion,
-      output: options.output
-    })
+      head_sha: options.headSha
+    }
+    
+    if (options.status) params.status = options.status
+    if (options.conclusion) params.conclusion = options.conclusion
+    if (options.output) params.output = options.output
+    
+    return octokit.rest.checks.create(params)
   }
 
   async updateCheckRun(
@@ -79,14 +77,17 @@ export class GitHubService {
   ) {
     const octokit = await this.getInstallationOctokit(installationId)
     
-    return octokit.rest.checks.update({
+    const params: any = {
       owner,
       repo,
-      check_run_id: checkRunId,
-      status: options.status,
-      conclusion: options.conclusion,
-      output: options.output
-    })
+      check_run_id: checkRunId
+    }
+    
+    if (options.status) params.status = options.status
+    if (options.conclusion) params.conclusion = options.conclusion
+    if (options.output) params.output = options.output
+    
+    return octokit.rest.checks.update(params)
   }
 
   async createComment(
@@ -106,6 +107,72 @@ export class GitHubService {
     })
   }
 
+  async updateComment(
+    installationId: number,
+    owner: string,
+    repo: string,
+    commentId: number,
+    body: string
+  ) {
+    const octokit = await this.getInstallationOctokit(installationId)
+    
+    return octokit.rest.issues.updateComment({
+      owner,
+      repo,
+      comment_id: commentId,
+      body
+    })
+  }
+
+  async addLabelsToIssue(
+    installationId: number,
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    labels: string[]
+  ) {
+    const octokit = await this.getInstallationOctokit(installationId)
+    
+    return octokit.rest.issues.addLabels({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      labels
+    })
+  }
+
+  async assignIssue(
+    installationId: number,
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    assignees: string[]
+  ) {
+    const octokit = await this.getInstallationOctokit(installationId)
+    
+    return octokit.rest.issues.addAssignees({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      assignees
+    })
+  }
+
+  async getIssue(
+    installationId: number,
+    owner: string,
+    repo: string,
+    issueNumber: number
+  ) {
+    const octokit = await this.getInstallationOctokit(installationId)
+    
+    return octokit.rest.issues.get({
+      owner,
+      repo,
+      issue_number: issueNumber
+    })
+  }
+
   async createPullRequest(
     installationId: number,
     owner: string,
@@ -120,15 +187,18 @@ export class GitHubService {
   ) {
     const octokit = await this.getInstallationOctokit(installationId)
     
-    return octokit.rest.pulls.create({
+    const params: any = {
       owner,
       repo,
       title: options.title,
       head: options.head,
-      base: options.base,
-      body: options.body,
-      draft: options.draft
-    })
+      base: options.base
+    }
+    
+    if (options.body) params.body = options.body
+    if (options.draft !== undefined) params.draft = options.draft
+    
+    return octokit.rest.pulls.create(params)
   }
 
   async getRepositoryConfig(
@@ -140,12 +210,15 @@ export class GitHubService {
     const octokit = await this.getInstallationOctokit(installationId)
     
     try {
-      const response = await octokit.rest.repos.getContent({
+      const params: any = {
         owner,
         repo,
-        path: '.ollama-turbo.yml',
-        ref
-      })
+        path: '.ollama-turbo.yml'
+      }
+      
+      if (ref) params.ref = ref
+      
+      const response = await octokit.rest.repos.getContent(params)
       
       if ('content' in response.data) {
         const content = Buffer.from(response.data.content, 'base64').toString('utf-8')

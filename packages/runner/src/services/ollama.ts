@@ -32,13 +32,19 @@ export class OllamaService {
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.OLLAMA_API_URL || 'https://ollama.com'
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+    
+    if (process.env.OLLAMA_API_KEY) {
+      headers['Authorization'] = `Bearer ${process.env.OLLAMA_API_KEY}`
+    }
+    
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 120000,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OLLAMA_API_KEY}`
-      }
+      headers
     })
   }
 

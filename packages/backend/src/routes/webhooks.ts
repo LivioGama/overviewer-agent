@@ -32,23 +32,16 @@ export async function webhookRoutes(fastify: FastifyInstance) {
     )
 
     if (!result.success) {
-      fastify.log.error(`Webhook processing failed: ${result.message}`, {
-        eventName,
-        deliveryId,
-        error: result.message
-      })
+      fastify.log.error(`Webhook processing failed: ${result.message} - Event: ${eventName}, Delivery: ${deliveryId}`)
       return reply.code(400).send({ error: result.message })
     }
 
-    fastify.log.info(`Webhook processed successfully: ${result.message}`, {
-      eventName,
-      deliveryId
-    })
+    fastify.log.info(`Webhook processed successfully: ${result.message} - Event: ${eventName}, Delivery: ${deliveryId}`)
 
     return reply.code(200).send({ success: true, message: result.message })
   })
 
-  fastify.get('/webhooks/health', async (request, reply) => {
+  fastify.get('/webhooks/health', async (_, reply) => {
     return reply.code(200).send({ 
       status: 'healthy',
       timestamp: new Date().toISOString()

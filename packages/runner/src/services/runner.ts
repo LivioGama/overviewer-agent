@@ -41,7 +41,7 @@ export class RunnerService {
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
       } catch (error) {
-        console.error('Error processing job:', error)
+        console.error('Error processing job:', error instanceof Error ? error.message : String(error))
         await new Promise(resolve => setTimeout(resolve, 5000))
       }
     }
@@ -112,7 +112,7 @@ export class RunnerService {
       
     } catch (error) {
       console.error(`Job ${job.id} failed:`, error)
-      await this.updateJobStatus(job.id, 'failed', { error: error.message })
+      await this.updateJobStatus(job.id, 'failed', { error: error instanceof Error ? error.message : String(error) })
     } finally {
       await this.cleanupWorkspace(jobWorkspace)
     }

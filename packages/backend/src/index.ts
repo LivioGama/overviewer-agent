@@ -8,15 +8,17 @@ import { webhookRoutes } from './routes/webhooks.js'
 import { queueService } from './services/queue.js'
 
 const fastify = Fastify({
-  logger: {
+  logger: env.NODE_ENV === 'development' ? {
     level: env.LOG_LEVEL,
-    transport: env.NODE_ENV === 'development' ? {
+    transport: {
       target: 'pino-pretty',
       options: {
         translateTime: 'HH:MM:ss Z',
         ignore: 'pid,hostname'
       }
-    } : undefined
+    }
+  } : {
+    level: env.LOG_LEVEL
   }
 })
 
@@ -38,7 +40,7 @@ const start = async () => {
     await fastify.register(webhookRoutes)
     await fastify.register(jobRoutes)
 
-    fastify.get('/health', async (request, reply) => {
+    fastify.get('/health', async (_, reply) => {
       return reply.send({
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -47,7 +49,7 @@ const start = async () => {
       })
     })
 
-    fastify.setErrorHandler((error, request, reply) => {
+    fastify.setErrorHandler((error, _, reply) => {
       fastify.log.error(error)
       
       if (error.validation) {
@@ -93,7 +95,7 @@ const shutdown = async (signal: string) => {
     await fastify.close()
     process.exit(0)
   } catch (err) {
-    fastify.log.error('Error during shutdown:', err)
+    fastify.log.error(err, 'Error during shutdown')
     process.exit(1)
   }
 }

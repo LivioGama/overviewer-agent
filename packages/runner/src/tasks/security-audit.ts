@@ -1,7 +1,7 @@
 import { Job } from '@ollama-turbo-agent/shared'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { BaseTask, TaskResult } from './executor.js'
+import { BaseTask, TaskResult } from './base-task.js'
 
 export class SecurityAuditTask extends BaseTask {
   async execute(job: Job): Promise<TaskResult> {
@@ -202,7 +202,7 @@ ${findings.map((finding, index) => `
 **Description:** ${finding.description}
 
 **Recommendations:**
-${finding.recommendations.map(rec => `- ${rec}`).join('\n')}
+${finding.recommendations.map((rec: string) => `- ${rec}`).join('\n')}
 
 ---
 `).join('')}

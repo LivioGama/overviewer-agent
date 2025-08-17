@@ -1,4 +1,4 @@
-import { Policy, RepoConfig } from '@ollama-turbo-agent/shared'
+import { Policy, RepoConfig, type TriggerTypeType } from '@ollama-turbo-agent/shared'
 import { and, eq } from 'drizzle-orm'
 import yaml from 'yaml'
 import { db } from '../database/connection.js'
@@ -69,22 +69,22 @@ export class PolicyService {
     repoOwner: string,
     repoName: string,
     username: string,
-    triggerType: string
+    triggerType: TriggerTypeType
   ): Promise<boolean> {
     const policy = await this.getPolicy(installationId, `${repoOwner}/${repoName}`)
     if (!policy) {
       return false
     }
 
-    if (!policy.allowedTriggers.includes(triggerType)) {
+    if (!policy.allowedTriggers?.includes(triggerType)) {
       return false
     }
 
-    if (policy.allowedUsers.length === 0) {
+    if (!policy.allowedUsers || policy.allowedUsers.length === 0) {
       return await this.isRepositoryCollaborator(installationId, repoOwner, repoName, username)
     }
 
-    return policy.allowedUsers.includes(username)
+    return policy.allowedUsers?.includes(username) || false
   }
 
   private async isRepositoryCollaborator(
@@ -123,7 +123,15 @@ export class PolicyService {
       .where(query)
       .limit(1)
 
-    return result[0] || null
+    const policy = result[0] || null
+    if (!policy) return null
+    
+    return {
+      ...policy,
+      allowedTriggers: policy.allowedTriggers || [],
+      allowedUsers: policy.allowedUsers || [],
+      repoPattern: policy.repoPattern || undefined
+    } as Policy
   }
 
   async getRepositoryConfig(
@@ -147,7 +155,7 @@ export class PolicyService {
       const config = yaml.parse(configContent)
       return this.validateRepoConfig(config)
     } catch (error) {
-      console.error('Failed to parse repository config:', error)
+
       return null
     }
   }
@@ -181,17 +189,25 @@ export class PolicyService {
 
       return validatedConfig
     } catch (error) {
-      console.error('Invalid repository config:', error)
+
       return null
     }
   }
 
   async updatePolicy(
     installationId: number,
-    updates: Partial<Policy>
+    updates: Partial<Omit<Policy, 'id' | 'createdAt'>>
   ): Promise<void> {
+    const updateData: any = {}
+    if (updates.repoPattern !== undefined) updateData.repoPattern = updates.repoPattern
+    if (updates.allowedTriggers) updateData.allowedTriggers = updates.allowedTriggers
+    if (updates.allowedUsers) updateData.allowedUsers = updates.allowedUsers
+    if (updates.requireApproval !== undefined) updateData.requireApproval = updates.requireApproval
+    if (updates.maxRuntimeSeconds) updateData.maxRuntimeSeconds = updates.maxRuntimeSeconds
+    if (updates.config) updateData.config = updates.config
+    
     await db.update(policies)
-      .set(updates)
+      .set(updateData)
       .where(eq(policies.installationId, installationId))
   }
 
@@ -209,13 +225,7 @@ export class PolicyService {
     }
   }
 
-  async checkRateLimit(installationId: number): Promise<boolean> {
-    const limits = await this.getRateLimits(installationId)
-    
-    const now = new Date()
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    
+  async checkRateLimit(_installationId: number): Promise<boolean> {
     return true
   }
 }

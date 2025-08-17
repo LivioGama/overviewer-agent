@@ -12,8 +12,8 @@ export class QueueService {
       url: env.REDIS_URL
     })
     
-    this.client.on('error', (err) => {
-      console.error('Redis client error:', err)
+    this.client.on('error', (_err) => {
+
     })
   }
 
@@ -71,18 +71,21 @@ export class QueueService {
     }
     
     const stream = result[0]
-    if (!stream.messages || stream.messages.length === 0) {
+    if (!stream?.messages || stream.messages.length === 0) {
       return null
     }
     
     const message = stream.messages[0]
+    if (!message?.message) {
+      return null
+    }
     const jobData = message.message.jobData
     
     if (typeof jobData === 'string') {
       try {
         return JSON.parse(jobData)
       } catch (error) {
-        console.error('Failed to parse job data:', error)
+
         return null
       }
     }
@@ -130,7 +133,7 @@ export class QueueService {
     try {
       return JSON.parse(jobData)
     } catch (error) {
-      console.error('Failed to parse job data:', error)
+
       return null
     }
   }

@@ -1,12 +1,13 @@
-import { CommentEvent, isBot, parseCommand, PullRequestEvent, PushEvent, validateWebhookSignature } from '@ollama-turbo-agent/shared'
+import { type CommentEvent, type IssueEvent, type PullRequestEvent, type PushEvent, type TaskTypeType, isBot, parseCommand, validateWebhookSignature } from '@ollama-turbo-agent/shared'
 import { env } from '../config/env.js'
+import { issueAnalyzerService } from './issue-analyzer.js'
 import { policyService } from './policy.js'
 import { queueService } from './queue.js'
 
 export class WebhookService {
   async handleWebhook(
     eventName: string,
-    payload: any,
+    payload: unknown,
     signature: string,
     body: string
   ): Promise<{ success: boolean; message?: string }> {
@@ -17,18 +18,20 @@ export class WebhookService {
     try {
       switch (eventName) {
         case 'issue_comment':
-          return await this.handleCommentEvent(payload)
+          return await this.handleCommentEvent(payload as CommentEvent)
+        case 'issues':
+          return await this.handleIssueEvent(payload as IssueEvent)
         case 'pull_request':
-          return await this.handlePullRequestEvent(payload)
+          return await this.handlePullRequestEvent(payload as PullRequestEvent)
         case 'push':
-          return await this.handlePushEvent(payload)
+          return await this.handlePushEvent(payload as PushEvent)
         case 'installation':
           return await this.handleInstallationEvent(payload)
         default:
           return { success: true, message: `Ignored event: ${eventName}` }
       }
     } catch (error) {
-      console.error(`Error handling webhook event ${eventName}:`, error)
+
       return { success: false, message: 'Internal server error' }
     }
   }
@@ -75,7 +78,7 @@ export class WebhookService {
       repoName,
       triggerType: 'comment',
       triggerPayload: payload,
-      taskType,
+      taskType: taskType as TaskTypeType,
       taskParams: {
         command: command.command,
         args: command.args,
@@ -157,20 +160,81 @@ export class WebhookService {
     return { success: true, message: 'Push automation job queued' }
   }
 
-  private async handleInstallationEvent(payload: any): Promise<{ success: boolean; message?: string }> {
-    if (payload.action === 'created') {
-      await policyService.createInstallation({
-        id: payload.installation.id,
-        accountId: payload.installation.account.id,
-        accountLogin: payload.installation.account.login,
-        accountType: payload.installation.account.type,
-        permissions: payload.installation.permissions
-      })
-    } else if (payload.action === 'deleted') {
-      await policyService.removeInstallation(payload.installation.id)
+  private async handleIssueEvent(payload: IssueEvent): Promise<{ success: boolean; message?: string }> {
+    if (payload.action !== 'opened') {
+      return { success: true, message: 'Ignored non-opened issue event' }
     }
 
-    return { success: true, message: `Installation ${payload.action}` }
+    // Check if we should process this issue
+    if (!issueAnalyzerService.shouldProcessIssue(payload)) {
+      return { success: true, message: 'Issue does not meet processing criteria' }
+    }
+
+    const installationId = payload.installation.id
+    const repoOwner = payload.repository.owner.login
+    const repoName = payload.repository.name
+    const issueNumber = payload.issue.number
+
+    // Check repository configuration
+    const config = await policyService.getRepositoryConfig(installationId, repoOwner, repoName)
+    if (!config || !config.automation.triggers.includes('issue_opened')) {
+      return { success: true, message: 'Issue automation not configured for this repository' }
+    }
+
+    // Analyze the issue to determine task type
+    const analysis = issueAnalyzerService.analyzeIssue(payload)
+
+    // Queue the appropriate job
+    await queueService.enqueueJob({
+      installationId,
+      repoOwner,
+      repoName,
+      triggerType: 'issue_opened',
+      triggerPayload: payload,
+      taskType: analysis.taskType,
+      taskParams: {
+        issueNumber,
+        issueTitle: payload.issue.title,
+        issueBody: payload.issue.body || '',
+        analysis,
+        autoTriggered: true
+      },
+      status: 'queued'
+    })
+
+    return { 
+      success: true, 
+      message: `Issue #${issueNumber} queued for ${analysis.taskType} (confidence: ${analysis.confidence}%)` 
+    }
+  }
+
+  private async handleInstallationEvent(payload: unknown): Promise<{ success: boolean; message?: string }> {
+    const installationPayload = payload as {
+      action: string
+      installation: {
+        id: number
+        account: {
+          id: number
+          login: string
+          type: string
+        }
+        permissions: Record<string, unknown>
+      }
+    }
+    
+    if (installationPayload.action === 'created') {
+      await policyService.createInstallation({
+        id: installationPayload.installation.id,
+        accountId: installationPayload.installation.account.id,
+        accountLogin: installationPayload.installation.account.login,
+        accountType: installationPayload.installation.account.type,
+        permissions: installationPayload.installation.permissions
+      })
+    } else if (installationPayload.action === 'deleted') {
+      await policyService.removeInstallation(installationPayload.installation.id)
+    }
+
+    return { success: true, message: `Installation ${installationPayload.action}` }
   }
 
   private mapCommandToTaskType(command: string): string | null {

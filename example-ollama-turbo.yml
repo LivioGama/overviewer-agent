@@ -8,9 +8,17 @@ automation:
   # Triggers - when to run automation
   triggers:
     - comment      # On issue/PR comments with commands
+    - issue_opened # Automatically on issue creation (NEW)
     - pr_opened    # Automatically on PR creation
     # - schedule   # Scheduled automation (future)
     # - push       # On push to main branch (future)
+  
+  # Issue processing configuration
+  issue_processing:
+    enabled: true
+    auto_assign: true
+    initial_comment: true
+    progress_updates: true
   
   # Task configurations
   tasks:

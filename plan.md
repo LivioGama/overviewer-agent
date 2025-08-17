@@ -1,368 +1,398 @@
-# Ollama Turbo Agent - Implementation Plan
+# Implementation Plan: Transform Ollama-Turbo-Agent to RooCode-Style Bot
 
-## Project Overview
+## Overview
+Transform the current command-driven ollama-turbo-agent into a roomote-style bot that automatically processes GitHub issues, creates PRs, and provides self-review functionality.
 
-A GitHub App that runs automation/agent tasks against repositories in the cloud, similar to Roomote. The system will execute AI-powered code changes, automated refactoring, testing, and other repository tasks triggered by GitHub events.
+## Current State Analysis
 
-## Architecture Components
+### What Works (Keep)
+- ✅ GitHub App integration with webhooks
+- ✅ Job queue system with multiple task types
+- ✅ Automatic PR creation infrastructure
+- ✅ Multiple AI task executors (BugFixTask, RefactorTask, etc.)
+- ✅ Repository configuration via `.ollama-turbo.yml`
 
-### Core System
-- **GitHub App**: Installs on orgs/repos, receives webhooks, uses installation tokens
-- **Cloud Backend**: Receives webhooks, authenticates, queues work, executes tasks
-- **Task Runners**: Stateless Docker containers that execute jobs
-- **Control Plane**: Stores configs, policies, audit logs, provides web UI
+### What Needs to Change
+- ❌ Only triggers on manual commands (`/fix`, `/refactor`)
+- ❌ No automatic issue processing
+- ❌ No issue commenting/communication
+- ❌ No self-review mechanism
+- ❌ Limited issue event handling
 
-### Tech Stack Selection
-- **Backend**: TypeScript/Node.js with Fastify
-- **Queue**: Redis Streams
-- **Runners**: Docker on AWS ECS/Fargate
-- **Database**: PostgreSQL for jobs and audit trails
-- **Cache**: Redis for rate limiting and deduplication
-- **Secrets**: AWS Secrets Manager
-- **Web UI**: Next.js with server actions
-- **Package Manager**: Bun (as per user preferences)
+## Phase 1: Issue Auto-Detection & Processing
 
-## Implementation Phases
+### 1.1 Add Issue Event Handler
+**File**: `packages/backend/src/services/webhook.ts`
 
-### Phase 1: GitHub App Foundation
-**Timeline: Week 1-2**
-
-#### 1.1 GitHub App Setup
-- [ ] Create GitHub App in GitHub Developer Settings
-- [ ] Configure webhook URL (will be cloud endpoint)
-- [ ] Set initial permissions:
-  - Contents: read/write
-  - Pull requests: read/write
-  - Issues: read/write
-  - Checks: read/write
-  - Metadata: read
-- [ ] Subscribe to events:
-  - issue_comment
-  - issues
-  - pull_request
-  - pull_request_review
-  - check_suite
-  - check_run
-  - push
-- [ ] Generate and securely store private key
-- [ ] Create App installation page
-
-#### 1.2 Project Structure Setup
-```
-ollama-turbo-agent/
-├── packages/
-│   ├── backend/           # Webhook receiver & API
-│   ├── runner/           # Task execution engine
-│   ├── web/              # Control plane UI
-│   └── shared/           # Common types & utilities
-├── infrastructure/       # AWS CDK/Terraform
-├── docker/              # Container definitions
-└── docs/                # Documentation
+Add new case in `handleWebhook()`:
+```typescript
+case 'issues':
+  return await this.handleIssueEvent(payload)
 ```
 
-#### 1.3 Backend Core
-- [ ] Initialize TypeScript project with Fastify
-- [ ] Set up GitHub webhook signature verification
-- [ ] Implement JWT creation for GitHub App authentication
-- [ ] Create installation token minting system
-- [ ] Basic webhook event parsing and routing
+### 1.2 Create Issue Event Handler
+**New Method**: `handleIssueEvent(payload: IssueEvent)`
 
-### Phase 2: Task Orchestration & Queue System
-**Timeline: Week 3-4**
+Logic:
+1. Check if action is 'opened'
+2. Ignore bot-created issues
+3. Analyze issue content to determine task type
+4. Post initial bot comment
+5. Queue appropriate job
 
-#### 2.1 Database Schema
+### 1.3 Issue Content Analysis
+**New Service**: `packages/backend/src/services/issue-analyzer.ts`
+
+Features:
+- Parse issue title/body for keywords
+- Map to task types (bug → bug_fix, feature → refactor, etc.)
+- Extract issue context and requirements
+- Determine priority/complexity
+
+### 1.4 Update Webhook Types
+**File**: `packages/shared/src/types/webhook.ts`
+
+Add:
+```typescript
+export const IssueEventSchema = z.object({
+  action: z.enum(['opened', 'closed', 'edited', 'labeled']),
+  issue: z.object({
+    number: z.number(),
+    title: z.string(),
+    body: z.string().nullable(),
+    // ... rest of issue structure
+  }),
+  // ... repository and installation info
+})
+```
+
+## Phase 2: Bot Communication System
+
+### 2.1 Bot Response Templates
+**New File**: `packages/shared/src/templates/bot-responses.ts`
+
+Templates for:
+- Initial investigation comment
+- Progress updates
+- Success/failure notifications
+- PR descriptions
+
+Example:
+```typescript
+export const INITIAL_COMMENT_TEMPLATE = `Hi! I'm here to help out the maintainers and am going to see if I can fix this issue. I'll investigate {{issue_summary}}. Thanks for reporting this!
+
+🔍 **Analysis in progress...**
+- Issue type: {{issue_type}}
+- Estimated complexity: {{complexity}}
+- Task queued: {{task_type}}
+
+I'll keep you updated on my progress!`
+```
+
+### 2.2 Update GitHub Service
+**File**: `packages/backend/src/services/github.ts`
+
+Add methods:
+- `commentOnIssue()`
+- `updateIssueComment()`
+- `addIssueLabels()`
+- `assignIssue()`
+
+### 2.3 Bot Communication Service
+**New File**: `packages/backend/src/services/bot-communication.ts`
+
+Handles:
+- Template rendering with variables
+- Progress tracking and updates
+- Error communication
+- Success notifications
+
+## Phase 3: Enhanced Task Execution
+
+### 3.1 Update Base Task Executor
+**File**: `packages/runner/src/tasks/executor.ts`
+
+Add to `BaseTask`:
+```typescript
+protected async updateIssueProgress(
+  job: Job,
+  status: string,
+  details?: string
+): Promise<void>
+
+protected async postInitialComment(job: Job): Promise<void>
+
+protected async postSuccessComment(
+  job: Job,
+  prUrl: string,
+  summary: string
+): Promise<void>
+```
+
+### 3.2 Enhanced Bug Fix Task
+**File**: `packages/runner/src/tasks/bug-fix.ts`
+
+Updates:
+- Post initial comment when starting
+- Provide progress updates during analysis
+- Use issue context for better fixes
+- Generate detailed PR descriptions
+- Post success comment with link to PR
+
+### 3.3 Issue Context Analysis
+**New Method**: `analyzeIssueContext()`
+
+Features:
+- Extract error logs/stack traces
+- Identify affected files/components
+- Understand reproduction steps
+- Parse expected vs actual behavior
+
+## Phase 4: Self-Review Mechanism
+
+### 4.1 PR Review Service
+**New File**: `packages/runner/src/services/pr-reviewer.ts`
+
+Capabilities:
+- Analyze generated code changes
+- Check for potential issues
+- Verify fix addresses original problem
+- Generate review comments
+- Suggest improvements
+
+### 4.2 Review Task
+**New File**: `packages/runner/src/tasks/review.ts`
+
+Process:
+1. Fetch PR diff
+2. Analyze changes against issue requirements
+3. Run static analysis
+4. Check for common issues
+5. Post review comments
+6. Approve or request changes
+
+### 4.3 Enhanced PR Creation
+**Update**: `BaseTask.createPullRequest()`
+
+Add:
+- Auto-assign reviewers
+- Add relevant labels
+- Link to original issue
+- Trigger self-review after creation
+- Use roomote-style PR template
+
+## Phase 5: Improved PR Templates
+
+### 5.1 PR Description Templates
+**File**: `packages/shared/src/templates/pr-templates.ts`
+
+RooCode-style template:
+```typescript
+export const BUG_FIX_PR_TEMPLATE = `This PR fixes issue #{{issue_number}} {{issue_title}}
+
+## Problem
+{{problem_description}}
+
+## Solution
+{{solution_description}}
+
+## Changes Made
+{{changes_list}}
+
+## Testing
+{{testing_results}}
+
+Fixes #{{issue_number}}`
+```
+
+### 5.2 Dynamic Template Rendering
+**Service**: Template engine to populate variables:
+- Issue details
+- Analysis results
+- File changes summary
+- Test results
+
+## Phase 6: Configuration & Policy Updates
+
+### 6.1 Repository Configuration
+**File**: `example-ollama-turbo.yml`
+
+Add new options:
+```yaml
+automation:
+  triggers:
+    - issue_opened    # NEW: Auto-process issues
+    - comment
+    - pr_opened
+  
+  issue_processing:
+    enabled: true
+    auto_assign: true
+    initial_comment: true
+    progress_updates: true
+  
+  self_review:
+    enabled: true
+    auto_approve_simple: false
+    review_criteria:
+      - code_quality
+      - test_coverage
+      - security_check
+```
+
+### 6.2 Policy Service Updates
+**File**: `packages/backend/src/services/policy.ts`
+
+Add:
+- Issue processing permissions
+- Auto-assignment rules
+- Review thresholds
+- Bot behavior configuration
+
+## Phase 7: Enhanced Workflow Integration
+
+### 7.1 Job Queue Enhancements
+**File**: `packages/backend/src/services/queue.ts`
+
+Add:
+- Job dependencies (review after PR creation)
+- Progress tracking
+- Issue linking
+- Automatic retries
+
+### 7.2 Runner Service Updates
+**File**: `packages/runner/src/services/runner.ts`
+
+Features:
+- Clone repository for each job
+- Maintain issue context throughout
+- Coordinate multiple related tasks
+- Handle cross-references between issues/PRs
+
+## Phase 8: Database Schema Updates
+
+### 8.1 Add Issue Tracking
+**File**: `packages/backend/src/database/schema.ts`
+
+New tables:
 ```sql
--- Jobs table
-CREATE TABLE jobs (
+CREATE TABLE issues (
   id UUID PRIMARY KEY,
-  installation_id BIGINT NOT NULL,
-  repo_owner VARCHAR(255) NOT NULL,
-  repo_name VARCHAR(255) NOT NULL,
-  commit_sha VARCHAR(40),
-  ref_name VARCHAR(255),
-  trigger_type VARCHAR(50) NOT NULL,
-  trigger_payload JSONB,
-  task_type VARCHAR(100) NOT NULL,
-  task_params JSONB,
-  status VARCHAR(50) DEFAULT 'queued',
-  created_at TIMESTAMP DEFAULT NOW(),
-  started_at TIMESTAMP,
-  completed_at TIMESTAMP,
-  result JSONB,
-  logs TEXT
+  github_issue_number INTEGER,
+  repository_id INTEGER,
+  issue_title TEXT,
+  issue_body TEXT,
+  analysis_result JSONB,
+  status VARCHAR(50),
+  assigned_job_id UUID REFERENCES jobs(id),
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Installations table
-CREATE TABLE installations (
-  id BIGINT PRIMARY KEY,
-  account_id BIGINT NOT NULL,
-  account_login VARCHAR(255) NOT NULL,
-  account_type VARCHAR(50) NOT NULL,
-  permissions JSONB,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Policies table
-CREATE TABLE policies (
+CREATE TABLE pr_reviews (
   id UUID PRIMARY KEY,
-  installation_id BIGINT NOT NULL,
-  repo_pattern VARCHAR(255),
-  allowed_triggers TEXT[],
-  allowed_users TEXT[],
-  require_approval BOOLEAN DEFAULT true,
-  max_runtime_seconds INTEGER DEFAULT 300,
-  config JSONB,
+  job_id UUID REFERENCES jobs(id),
+  pr_number INTEGER,
+  review_result JSONB,
+  approved BOOLEAN,
   created_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
-#### 2.2 Queue Implementation
-- [ ] Set up Redis Streams for job queue
-- [ ] Implement job enqueue/dequeue logic
-- [ ] Add job retry mechanism with exponential backoff
-- [ ] Create job status tracking system
-- [ ] Implement dead letter queue for failed jobs
+## Phase 9: Testing & Validation
 
-#### 2.3 Policy Engine
-- [ ] Create policy validation system
-- [ ] Implement permission checking (who can trigger what)
-- [ ] Add rate limiting per installation/user
-- [ ] Create approval workflow system
+### 9.1 Integration Tests
+**New Directory**: `packages/backend/src/__tests__/integration/`
 
-### Phase 3: Task Runner System
-**Timeline: Week 5-6**
+Test scenarios:
+- Issue creation → bot comment → job creation
+- Job execution → PR creation → self-review
+- Error handling and edge cases
+- Configuration validation
 
-#### 3.1 Docker Runner Base
-- [ ] Create base Docker image with:
-  - Node.js runtime
-  - Git CLI
-  - GitHub CLI
-  - Ollama client
-  - Common development tools
-- [ ] Implement secure repository cloning with installation tokens
-- [ ] Create isolated workspace management
-- [ ] Add resource limits and timeouts
+### 9.2 Mock GitHub Environment
+**Setup**: Test environment with:
+- Mock GitHub webhooks
+- Simulated repositories
+- Controlled issue/PR scenarios
+- Ollama service mocking
 
-#### 3.2 Task Execution Engine
-- [ ] Create task definition system
-- [ ] Implement common task types:
-  - AI-powered code refactoring
-  - Automated testing
-  - Documentation generation
-  - Dependency updates
-  - Code quality fixes
-- [ ] Add result collection and formatting
-- [ ] Implement safe branch creation and PR opening
+## Phase 10: Monitoring & Analytics
 
-#### 3.3 Ollama Integration
-- [ ] Set up Ollama server infrastructure
-- [ ] Create AI agent task runners for:
-  - Code analysis and suggestions
-  - Automated bug fixes
-  - Code review comments
-  - Documentation writing
-- [ ] Implement context-aware prompting with repository knowledge
+### 10.1 Bot Performance Tracking
+**New Service**: `packages/backend/src/services/analytics.ts`
 
-### Phase 4: GitHub Integration & Reporting
-**Timeline: Week 7-8**
+Metrics:
+- Issue processing time
+- Success/failure rates
+- Review accuracy
+- User satisfaction (reactions/comments)
 
-#### 4.1 GitHub Checks API
-- [ ] Create Check Run for each job
-- [ ] Stream real-time logs to Check Run
-- [ ] Add summary with links to full logs
-- [ ] Implement status updates (queued, in_progress, completed, failed)
+### 10.2 Dashboard Updates
+**File**: `packages/web/src/components/dashboard/Dashboard.tsx`
 
-#### 4.2 PR and Comment Management
-- [ ] Automated PR creation for task results
-- [ ] Result summary comments
-- [ ] Interactive command parsing (/run, /approve, /cancel)
-- [ ] Label management (automation:pending, automation:applied)
+Add sections:
+- Recent issues processed
+- Bot performance metrics
+- Active jobs with issue links
+- Review statistics
 
-#### 4.3 Repository Configuration
-- [ ] Implement `.ollama-turbo.yml` config file support
-```yaml
-# Example config
-automation:
-  triggers:
-    - comment
-    - pr_opened
-    - schedule
-  tasks:
-    refactor:
-      command: "ollama-refactor"
-      model: "codellama"
-      max_tokens: 4000
-      timeout: 300
-    test:
-      command: "npm test"
-      auto_fix: true
-  approval:
-    required: true
-    maintainers_only: true
-  output:
-    open_pr: true
-    push_direct: false
-```
+## Implementation Timeline
 
-### Phase 5: Web UI & Control Plane
-**Timeline: Week 9-10**
+### Week 1-2: Foundation
+- [ ] Issue event handling
+- [ ] Basic bot communication
+- [ ] Issue analysis service
 
-#### 5.1 Next.js Dashboard
-- [ ] Authentication with GitHub OAuth
-- [ ] Job listing and filtering
-- [ ] Job detail view with logs and artifacts
-- [ ] Real-time job status updates
-- [ ] Installation management
+### Week 3-4: Task Enhancement
+- [ ] Enhanced task execution
+- [ ] Progress tracking
+- [ ] PR template improvements
 
-#### 5.2 Admin Features
-- [ ] Installation settings
-- [ ] Policy management UI
-- [ ] Audit log viewer
-- [ ] Rate limit configuration
-- [ ] Token rotation tools
+### Week 5-6: Self-Review
+- [ ] PR review service
+- [ ] Review task implementation
+- [ ] Approval workflows
 
-### Phase 6: Advanced Features
-**Timeline: Week 11-12**
+### Week 7-8: Integration
+- [ ] Database updates
+- [ ] Configuration enhancements
+- [ ] Testing framework
 
-#### 6.1 Scheduling System
-- [ ] Cron-based task scheduling
-- [ ] Recurring maintenance tasks
-- [ ] Dependency update automation
-- [ ] Code health monitoring
+### Week 9-10: Polish
+- [ ] Dashboard updates
+- [ ] Documentation
+- [ ] Performance optimization
 
-#### 6.2 Multi-repo Support
-- [ ] Bulk operations across repositories
-- [ ] Monorepo path filtering
-- [ ] Cross-repo dependency tracking
-- [ ] Organization-wide policies
+## Risk Mitigation
 
-#### 6.3 Enhanced Security
-- [ ] Code scanning before execution
-- [ ] Sandbox environment isolation
-- [ ] Audit trail for all operations
-- [ ] Secrets management integration
+### Bot Spam Prevention
+- Rate limiting per repository
+- Configurable bot behavior
+- Manual override capabilities
+- Issue type filtering
 
-### Phase 7: Deployment & Production
-**Timeline: Week 13-14**
+### Quality Assurance
+- Comprehensive testing
+- Staged rollout
+- Performance monitoring
+- Rollback procedures
 
-#### 7.1 Infrastructure as Code
-- [ ] AWS CDK or Terraform templates
-- [ ] ECS/Fargate service definitions
-- [ ] RDS PostgreSQL setup
-- [ ] ElastiCache Redis configuration
-- [ ] ALB and security groups
-
-#### 7.2 CI/CD Pipeline
-- [ ] GitHub Actions workflows
-- [ ] Automated testing
-- [ ] Container image building
-- [ ] Deployment automation
-- [ ] Rollback procedures
-
-#### 7.3 Monitoring & Observability
-- [ ] CloudWatch logs and metrics
-- [ ] Application performance monitoring
-- [ ] Error tracking and alerting
-- [ ] Cost monitoring and optimization
-
-## Security Considerations
-
-### Authentication & Authorization
-- [ ] GitHub App private key rotation
-- [ ] Installation token lifecycle management
-- [ ] User permission validation
-- [ ] API rate limiting
-
-### Runtime Security
-- [ ] Container isolation
-- [ ] Network restrictions
-- [ ] Resource limits
-- [ ] Code execution sandboxing
-
-### Data Protection
-- [ ] Minimal data retention
-- [ ] Log sanitization
-- [ ] Encrypted secrets storage
-- [ ] GDPR compliance considerations
-
-## Example Workflows
-
-### AI-Powered Refactoring
-1. User comments: `/ollama refactor auth module for better security`
-2. Webhook triggers job creation
-3. Runner clones repository
-4. Ollama analyzes code and generates improvements
-5. Changes committed to new branch
-6. PR opened with detailed explanation
-7. Check run shows analysis and changes
-8. Maintainer reviews and approves
-9. Changes merged automatically
-
-### Automated Testing
-1. PR opened with new feature
-2. Automated test generation triggered
-3. Ollama analyzes code and creates comprehensive tests
-4. Tests run and results reported
-5. Coverage analysis provided
-6. Suggestions for additional test cases
-
-### Documentation Updates
-1. Code changes detected in PR
-2. Documentation sync job triggered
-3. Ollama updates relevant documentation
-4. Consistency checks performed
-5. Documentation PR opened
-6. Link back to original changes
-
-## Risk Assessment & Mitigation
-
-### High Priority Risks
-- **Security vulnerabilities in code execution**
-  - Mitigation: Strict sandboxing, code review, security scanning
-- **GitHub API rate limiting**
-  - Mitigation: Intelligent queuing, request optimization, multiple tokens
-- **Cost overruns from AI model usage**
-  - Mitigation: Usage monitoring, budget alerts, request optimization
-
-### Medium Priority Risks
-- **Database performance under load**
-  - Mitigation: Connection pooling, read replicas, query optimization
-- **Container resource exhaustion**
-  - Mitigation: Resource limits, auto-scaling, monitoring
+### User Experience
+- Clear bot communication
+- Opt-out mechanisms
+- Customizable templates
+- Progress transparency
 
 ## Success Metrics
 
-### Technical Metrics
-- Job completion rate >95%
-- Average job execution time <5 minutes
-- API response time <200ms
-- System uptime >99.9%
+- **Automation Rate**: % of issues automatically processed
+- **Fix Accuracy**: % of fixes that resolve issues correctly
+- **Response Time**: Time from issue creation to initial bot response
+- **PR Quality**: Review scores and approval rates
+- **User Satisfaction**: Feedback and adoption metrics
 
-### User Experience Metrics
-- User adoption rate
-- Task success rate
-- User satisfaction scores
-- Feature usage analytics
+## Conclusion
 
-## Next Steps
-
-1. **Immediate Actions**:
-   - Set up development environment
-   - Create GitHub App
-   - Initialize project structure
-
-2. **Week 1 Goals**:
-   - Basic webhook handling
-   - GitHub authentication working
-   - Database schema implemented
-
-3. **MVP Definition**:
-   - Simple code refactoring tasks
-   - Basic PR creation
-   - Approval workflow
-   - Web dashboard
-
-This plan provides a comprehensive roadmap for building the Ollama Turbo Agent while maintaining security, scalability, and user experience as primary concerns.
+This plan transforms ollama-turbo-agent from a command-driven tool into a proactive roomote-style bot that automatically processes GitHub issues, creates PRs, and provides self-review capabilities. The implementation maintains the existing architecture while adding the necessary automation and communication layers.
 
 

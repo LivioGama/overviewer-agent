@@ -1,7 +1,7 @@
 import { Job } from '@ollama-turbo-agent/shared'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { BaseTask, TaskResult } from './executor.js'
+import { BaseTask, TaskResult } from './base-task.js'
 
 export class TestGenerationTask extends BaseTask {
   async execute(job: Job): Promise<TaskResult> {

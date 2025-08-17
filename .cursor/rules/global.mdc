@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+When working on this repository, when you fix stuff that are nodeJS/nextJS related, instead of running the full docker, try to test building/running it with simple bun/nodeJS to see if it works and, only when it does, try the docker final test. Do not write or edit any docker or docker compose related file before that. This is to optimize the process of try and fail by avoiding triggering unnecessary tooling that brings no value to the fix made.
+
+Run every task that might hang (in particular runner related) with a timeout before (max 5)
