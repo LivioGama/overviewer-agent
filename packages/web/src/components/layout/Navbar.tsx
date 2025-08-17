@@ -1,11 +1,11 @@
-'use client'
+"use client";
 
-import { useAuth } from '@/components/auth/AuthProvider'
-import { ThemeToggle } from '@/components/theme/ThemeToggle'
-import Link from 'next/link'
+import { useAuth } from "@/components/auth/AuthProvider";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import Link from "next/link";
 
 export const Navbar = () => {
-  const { user, signIn, signOut } = useAuth()
+  const { user, signIn, signOut } = useAuth();
 
   return (
     <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors">
@@ -43,9 +43,9 @@ export const Navbar = () => {
                 >
                   Jobs
                 </Link>
-                
+
                 <ThemeToggle />
-                
+
                 <div className="flex items-center space-x-3">
                   <img
                     src={user.avatar_url}
@@ -80,7 +80,5 @@ export const Navbar = () => {
         </div>
       </div>
     </nav>
-  )
-}
-
-
+  );
+};

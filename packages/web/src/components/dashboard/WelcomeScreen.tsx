@@ -1,48 +1,54 @@
-'use client'
+"use client";
 
-import { useAuth } from '@/components/auth/AuthProvider'
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const features = [
   {
-    title: 'AI-Powered Refactoring',
-    description: 'Automatically improve code quality, readability, and performance with AI assistance.',
-    icon: '🔧',
-    command: '/refactor'
+    title: "AI-Powered Refactoring",
+    description:
+      "Automatically improve code quality, readability, and performance with AI assistance.",
+    icon: "🔧",
+    command: "/refactor",
   },
   {
-    title: 'Test Generation',
-    description: 'Generate comprehensive unit tests for your codebase with edge cases and mocking.',
-    icon: '🧪',
-    command: '/test'
+    title: "Test Generation",
+    description:
+      "Generate comprehensive unit tests for your codebase with edge cases and mocking.",
+    icon: "🧪",
+    command: "/test",
   },
   {
-    title: 'Documentation',
-    description: 'Create and maintain up-to-date documentation for functions, classes, and modules.',
-    icon: '📚',
-    command: '/docs'
+    title: "Documentation",
+    description:
+      "Create and maintain up-to-date documentation for functions, classes, and modules.",
+    icon: "📚",
+    command: "/docs",
   },
   {
-    title: 'Security Audit',
-    description: 'Identify and fix security vulnerabilities in your code automatically.',
-    icon: '🔒',
-    command: '/security'
+    title: "Security Audit",
+    description:
+      "Identify and fix security vulnerabilities in your code automatically.",
+    icon: "🔒",
+    command: "/security",
   },
   {
-    title: 'Bug Fixes',
-    description: 'Analyze and fix bugs with AI-powered debugging and solution suggestions.',
-    icon: '🐛',
-    command: '/fix'
+    title: "Bug Fixes",
+    description:
+      "Analyze and fix bugs with AI-powered debugging and solution suggestions.",
+    icon: "🐛",
+    command: "/fix",
   },
   {
-    title: 'Code Quality',
-    description: 'Improve code quality with best practices, performance optimizations, and clean code principles.',
-    icon: '✨',
-    command: '/quality'
-  }
-]
+    title: "Code Quality",
+    description:
+      "Improve code quality with best practices, performance optimizations, and clean code principles.",
+    icon: "✨",
+    command: "/quality",
+  },
+];
 
 export const WelcomeScreen = () => {
-  const { user } = useAuth()
+  const { user } = useAuth();
 
   return (
     <div className="space-y-12">
@@ -53,7 +59,10 @@ export const WelcomeScreen = () => {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature) => (
-            <div key={feature.title} className="card p-6 hover:shadow-lg transition-all">
+            <div
+              key={feature.title}
+              className="card p-6 hover:shadow-lg transition-all"
+            >
               <div className="flex items-start space-x-4">
                 <div className="text-3xl">{feature.icon}</div>
                 <div className="flex-1">
@@ -84,9 +93,12 @@ export const WelcomeScreen = () => {
               1
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 transition-colors">Install the GitHub App</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 transition-colors">
+                Install the GitHub App
+              </h3>
               <p className="text-gray-600 dark:text-gray-300 transition-colors">
-                Install Ollama Turbo Agent on your GitHub repositories to enable automation.
+                Install Ollama Turbo Agent on your GitHub repositories to enable
+                automation.
               </p>
               {!user && (
                 <button className="mt-2 btn btn-primary">
@@ -101,9 +113,15 @@ export const WelcomeScreen = () => {
               2
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 transition-colors">Configure Repository</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 transition-colors">
+                Configure Repository
+              </h3>
               <p className="text-gray-600 dark:text-gray-300 transition-colors">
-                Add a <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded transition-colors">.ollama-turbo.yml</code> configuration file to customize automation settings.
+                Add a{" "}
+                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded transition-colors">
+                  .ollama-turbo.yml
+                </code>{" "}
+                configuration file to customize automation settings.
               </p>
             </div>
           </div>
@@ -113,9 +131,15 @@ export const WelcomeScreen = () => {
               3
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 transition-colors">Use Commands</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 transition-colors">
+                Use Commands
+              </h3>
               <p className="text-gray-600 dark:text-gray-300 transition-colors">
-                Comment on issues or pull requests with commands like <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded transition-colors">/refactor</code> to trigger automation.
+                Comment on issues or pull requests with commands like{" "}
+                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded transition-colors">
+                  /refactor
+                </code>{" "}
+                to trigger automation.
               </p>
             </div>
           </div>
@@ -159,25 +183,39 @@ automation:
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="text-center">
-            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">10x</div>
-            <div className="text-gray-600 dark:text-gray-300 transition-colors">Faster Development</div>
+            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">
+              10x
+            </div>
+            <div className="text-gray-600 dark:text-gray-300 transition-colors">
+              Faster Development
+            </div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">95%</div>
-            <div className="text-gray-600 dark:text-gray-300 transition-colors">Code Quality Improvement</div>
+            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">
+              95%
+            </div>
+            <div className="text-gray-600 dark:text-gray-300 transition-colors">
+              Code Quality Improvement
+            </div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">24/7</div>
-            <div className="text-gray-600 dark:text-gray-300 transition-colors">Automated Assistance</div>
+            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">
+              24/7
+            </div>
+            <div className="text-gray-600 dark:text-gray-300 transition-colors">
+              Automated Assistance
+            </div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">0</div>
-            <div className="text-gray-600 dark:text-gray-300 transition-colors">Manual Effort Required</div>
+            <div className="text-3xl font-bold text-primary-600 dark:text-primary-400 transition-colors">
+              0
+            </div>
+            <div className="text-gray-600 dark:text-gray-300 transition-colors">
+              Manual Effort Required
+            </div>
           </div>
         </div>
       </section>
     </div>
-  )
-}
-
-
+  );
+};

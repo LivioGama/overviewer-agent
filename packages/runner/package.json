@@ -16,16 +16,16 @@
     "docker:run": "docker run --rm ollama-turbo-runner"
   },
   "dependencies": {
-    "@ollama-turbo-agent/shared": "workspace:*",
-    "@octokit/rest": "^20.0.0",
     "@octokit/auth-app": "^6.0.0",
+    "@octokit/rest": "^20.0.0",
+    "@ollama-turbo-agent/shared": "workspace:*",
+    "axios": "^1.11.0",
+    "fs-extra": "^11.0.0",
     "redis": "^4.6.0",
     "simple-git": "^3.20.0",
-    "axios": "^1.6.0",
-    "zod": "^3.22.0",
     "uuid": "^9.0.0",
-    "fs-extra": "^11.0.0",
-    "yaml": "^2.3.0"
+    "yaml": "^2.3.0",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.0",
@@ -36,5 +36,3 @@
     "@typescript-eslint/parser": "^6.0.0"
   }
 }
-
-
