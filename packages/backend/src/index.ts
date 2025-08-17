@@ -1,7 +1,7 @@
 ```ts
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Ollama Turbo Agent – Backend entry point
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 import Fastify, {
   type FastifyInstance,
@@ -21,16 +21,16 @@ import { jobRoutes } from './apps/backend/routes/jobs.js';
 import { webhookRoutes } from './apps/backend/routes/webhooks.js';
 import { queueService } from './apps/backend/services/queue.js';
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Types & Constants
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 enum TermSignal {
   SIGINT = 'SIGINT',
   SIGTERM = 'SIGTERM',
 }
 
-/** Health‑check response payload */
+/** Payload returned by the health‑check endpoint. */
 interface HealthResponse {
   status: 'healthy';
   timestamp: string;
@@ -38,9 +38,9 @@ interface HealthResponse {
   environment: string;
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Logger configuration
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 function buildLoggerOptions(): FastifyLoggerOptions {
   const base = { level: env.LOG_LEVEL } as const;
@@ -61,17 +61,17 @@ function buildLoggerOptions(): FastifyLoggerOptions {
   return base;
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
- * Fastify instance factory
- *─────────────────────────────────────────────────────────────────────────────*/
+/*───────────────────────────────────────────────────────────────
+ * Application factory
+ *───────────────────────────────────────────────────────────────*/
 
 function createApp(): FastifyInstance {
   return Fastify({ logger: buildLoggerOptions() });
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Plugins
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 const registerPlugins: FastifyPluginAsync = async (app) => {
   await app.register(helmet, { contentSecurityPolicy: false });
@@ -82,22 +82,22 @@ const registerPlugins: FastifyPluginAsync = async (app) => {
   });
 };
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Routes
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
-const healthHandler = (
+async function healthHandler(
   _req: FastifyRequest,
   reply: FastifyReply,
-): void => {
+): Promise<void> {
   const payload: HealthResponse = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version ?? '0.1.0',
     environment: env.NODE_ENV,
   };
-  reply.code(200).send(payload);
-};
+  await reply.code(200).send(payload);
+}
 
 const registerRoutes: FastifyPluginAsync = async (app) => {
   await app.register(authRoutes);
@@ -106,16 +106,15 @@ const registerRoutes: FastifyPluginAsync = async (app) => {
   app.get('/health', healthHandler);
 };
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Global error handling
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 function setErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler(
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Validation errors raised by Fastify schema validation
       if (error.validation) {
         void reply
           .code(400)
@@ -123,39 +122,37 @@ function setErrorHandler(app: FastifyInstance): void {
         return;
       }
 
-      // Fastify‑generated HTTP errors
       if (error.statusCode && error.message) {
         void reply.code(error.statusCode).send({ error: error.message });
         return;
       }
 
-      // Fallback – unexpected internal error
       void reply.code(500).send({ error: 'Internal server error' });
     },
   );
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
- * Graceful shutdown helpers
- *─────────────────────────────────────────────────────────────────────────────*/
+/*───────────────────────────────────────────────────────────────
+ * Graceful shutdown
+ *───────────────────────────────────────────────────────────────*/
 
 async function closeQueue(app: FastifyInstance): Promise<void> {
   try {
     await queueService.disconnect();
-  } catch (e) {
-    app.log.error({ err: e }, 'Failed to disconnect queue service');
+  } catch (err) {
+    app.log.error({ err }, 'Failed to disconnect queue service');
   }
 }
 
 async function closeServer(app: FastifyInstance): Promise<void> {
   try {
     await app.close();
-  } catch (e) {
-    app.log.error({ err: e }, 'Failed to close Fastify server');
+  } catch (err) {
+    app.log.error({ err }, 'Failed to close Fastify server');
   }
 }
 
-/** Run all shutdown tasks, logging any failures. */
+/** Executes all shutdown tasks, logging any failures. */
 async function shutdown(app: FastifyInstance): Promise<void> {
   const tasks = [closeQueue(app), closeServer(app)];
   const results = await Promise.allSettled(tasks);
@@ -167,9 +164,9 @@ async function shutdown(app: FastifyInstance): Promise<void> {
   }
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Signal handling
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 function bindSignalHandlers(app: FastifyInstance): void {
   const handle = async (signal: TermSignal) => {
@@ -183,9 +180,9 @@ function bindSignalHandlers(app: FastifyInstance): void {
   }
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Process‑wide error handling
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 function bindProcessErrorHandlers(app: FastifyInstance): void {
   process.on('unhandledRejection', (reason) => {
@@ -194,13 +191,15 @@ function bindProcessErrorHandlers(app: FastifyInstance): void {
 
   process.once('uncaughtException', (err) => {
     app.log.error(err, 'Uncaught exception – terminating');
-    void app.close().finally(() => process.exit(1));
+    void app
+      .close()
+      .finally(() => process.exit(1));
   });
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Bootstrap
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 async function bootstrap(): Promise<void> {
   const app = createApp();
@@ -212,21 +211,16 @@ async function bootstrap(): Promise<void> {
     bindProcessErrorHandlers(app);
 
     await queueService.createConsumerGroup();
-
     await app.ready();
 
-    const address = await app.listen({
-      host: '0.0.0.0',
-      port: env.PORT,
-    });
-
+    const address = await app.listen({ host: '0.0.0.0', port: env.PORT });
     app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
     app.log.info(`Environment: ${env.NODE_ENV}`);
     app.log.info(`Log level: ${env.LOG_LEVEL}`);
 
     bindSignalHandlers(app);
   } catch (error) {
-    // Logger may not be ready – fallback to console.
+    // Logger might not be initialised – fallback to console.
     const logger = (app?.log ?? console) as {
       error: (obj: unknown, msg?: string) => void;
     };
@@ -235,9 +229,9 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-/*─────────────────────────────────────────────────────────────────────────────
+/*───────────────────────────────────────────────────────────────
  * Run
- *─────────────────────────────────────────────────────────────────────────────*/
+ *───────────────────────────────────────────────────────────────*/
 
 await bootstrap();
 ```
