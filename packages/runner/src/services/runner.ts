@@ -206,9 +206,9 @@ export class RunnerService {
     );
 
     const signature = crypto
-      .sign("RSA-SHA256", Buffer.from(`${header}.${payloadStr}`))
-      .update(privateKey.replace(/\\n/g, "\n"))
-      .sign("base64url");
+      .createSign("RSA-SHA256")
+      .update(`${header}.${payloadStr}`)
+      .sign(privateKey.replace(/\\n/g, "\n"), "base64url");
 
     return `${header}.${payloadStr}.${signature}`;
   }
