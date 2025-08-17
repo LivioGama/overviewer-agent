@@ -1,6 +1,6 @@
-import { z } from 'zod'
+import { z } from "zod";
 
-export const AccountType = z.enum(['Organization', 'User'])
+export const AccountType = z.enum(["Organization", "User"]);
 
 export const InstallationSchema = z.object({
   id: z.number().int().positive(),
@@ -9,21 +9,19 @@ export const InstallationSchema = z.object({
   accountType: AccountType,
   permissions: z.record(z.any()),
   createdAt: z.date(),
-  updatedAt: z.date()
-})
+  updatedAt: z.date(),
+});
 
 export const InstallationCreateSchema = InstallationSchema.omit({
   createdAt: true,
-  updatedAt: true
-})
+  updatedAt: true,
+});
 
 export const InstallationUpdateSchema = InstallationSchema.partial().extend({
-  id: z.number().int().positive()
-})
+  id: z.number().int().positive(),
+});
 
-export type Installation = z.infer<typeof InstallationSchema>
-export type InstallationCreate = z.infer<typeof InstallationCreateSchema>
-export type InstallationUpdate = z.infer<typeof InstallationUpdateSchema>
-export type AccountTypeType = z.infer<typeof AccountType>
-
-
+export type Installation = z.infer<typeof InstallationSchema>;
+export type InstallationCreate = z.infer<typeof InstallationCreateSchema>;
+export type InstallationUpdate = z.infer<typeof InstallationUpdateSchema>;
+export type AccountTypeType = z.infer<typeof AccountType>;

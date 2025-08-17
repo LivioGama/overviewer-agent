@@ -1,5 +1,5 @@
 {
-  "name": "ollama-turbo-agent",
+  "name": "overviewer-agent",
   "version": "0.1.0",
   "private": true,
   "description": "GitHub App that runs automation/agent tasks against repositories in the cloud",

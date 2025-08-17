@@ -1,7 +1,7 @@
-# Implementation Plan: Transform Ollama-Turbo-Agent to RooCode-Style Bot
+# Implementation Plan: Transform overviewer-Agent to RooCode-Style Bot
 
 ## Overview
-Transform the current command-driven ollama-turbo-agent into a roomote-style bot that automatically processes GitHub issues, creates PRs, and provides self-review functionality.
+Transform the current command-driven overviewer-agent into a roomote-style bot that automatically processes GitHub issues, creates PRs, and provides self-review functionality.
 
 ## Current State Analysis
 
@@ -10,7 +10,7 @@ Transform the current command-driven ollama-turbo-agent into a roomote-style bot
 - ✅ Job queue system with multiple task types
 - ✅ Automatic PR creation infrastructure
 - ✅ Multiple AI task executors (BugFixTask, RefactorTask, etc.)
-- ✅ Repository configuration via `.ollama-turbo.yml`
+- ✅ Repository configuration via `.overviewer.yml`
 
 ### What Needs to Change
 - ❌ Only triggers on manual commands (`/fix`, `/refactor`)
@@ -215,7 +215,7 @@ Fixes #{{issue_number}}`
 ## Phase 6: Configuration & Policy Updates
 
 ### 6.1 Repository Configuration
-**File**: `example-ollama-turbo.yml`
+**File**: `example-overviewer.yml`
 
 Add new options:
 ```yaml
@@ -393,6 +393,6 @@ Add sections:
 
 ## Conclusion
 
-This plan transforms ollama-turbo-agent from a command-driven tool into a proactive roomote-style bot that automatically processes GitHub issues, creates PRs, and provides self-review capabilities. The implementation maintains the existing architecture while adding the necessary automation and communication layers.
+This plan transforms overviewer-agent from a command-driven tool into a proactive roomote-style bot that automatically processes GitHub issues, creates PRs, and provides self-review capabilities. The implementation maintains the existing architecture while adding the necessary automation and communication layers.
 
 

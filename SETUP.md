@@ -1,6 +1,6 @@
 # Ollama Turbo Agent - Setup Guide
 
-Complete setup instructions for deploying Ollama Turbo Agent with domain `https://ollama-turbo-agent.liviogama.com`.
+Complete setup instructions for deploying Ollama Turbo Agent with domain `https://overviewer-agent.liviogama.com`.
 
 ## 🔧 **1. GitHub App Configuration**
 
@@ -12,14 +12,14 @@ Complete setup instructions for deploying Ollama Turbo Agent with domain `https:
    ```
 
 2. **Basic Information**
-   - **GitHub App name**: `ollama-turbo-agent`
+   - **GitHub App name**: `overviewer-agent`
    - **Description**: `AI-powered GitHub automation for code refactoring, testing, documentation, and more`
-   - **Homepage URL**: `https://ollama-turbo-agent.liviogama.com`
-   - **User authorization callback URL**: `https://ollama-turbo-agent.liviogama.com/auth/callback`
-   - **Setup URL**: `https://ollama-turbo-agent.liviogama.com/setup` (optional)
+   - **Homepage URL**: `https://overviewer-agent.liviogama.com`
+   - **User authorization callback URL**: `https://overviewer-agent.liviogama.com/auth/callback`
+   - **Setup URL**: `https://overviewer-agent.liviogama.com/setup` (optional)
 
 3. **Webhook Configuration**
-   - **Webhook URL**: `https://ollama-turbo-agent.liviogama.com/webhooks/github`
+   - **Webhook URL**: `https://overviewer-agent.liviogama.com/webhooks/github`
    - **Webhook secret**: Generate a secure random string
    ```bash
    openssl rand -hex 32
@@ -66,7 +66,7 @@ REDIS_URL=redis://redis:6379
 OLLAMA_API_URL=http://ollama:11434
 
 # Authentication
-NEXTAUTH_URL=https://ollama-turbo-agent.liviogama.com
+NEXTAUTH_URL=https://overviewer-agent.liviogama.com
 NEXTAUTH_SECRET=your_production_secret_here
 
 # Application Configuration
@@ -114,7 +114,7 @@ curl http://localhost:11434/api/version
 ```bash
 # Clone the repository
 git clone <your-repo-url>
-cd ollama-turbo-agent
+cd overviewer-agent
 
 # Create environment file (use the .env created above)
 
@@ -140,11 +140,11 @@ docker-compose logs -f
 
 ```bash
 # Check service health
-curl https://ollama-turbo-agent.liviogama.com/health
-curl https://ollama-turbo-agent.liviogama.com/webhooks/health
+curl https://overviewer-agent.liviogama.com/health
+curl https://overviewer-agent.liviogama.com/webhooks/health
 
 # Test webhook endpoint
-curl -X POST https://ollama-turbo-agent.liviogama.com/webhooks/github \
+curl -X POST https://overviewer-agent.liviogama.com/webhooks/github \
   -H "Content-Type: application/json" \
   -H "X-GitHub-Event: ping" \
   -H "X-Hub-Signature-256: sha256=test" \
@@ -157,7 +157,7 @@ curl -X POST https://ollama-turbo-agent.liviogama.com/webhooks/github \
 
 1. **Get Installation URL**
    ```
-   https://github.com/apps/ollama-turbo-agent/installations/new
+   https://github.com/apps/overviewer-agent/installations/new
    ```
 
 2. **Install on Repositories**
@@ -167,7 +167,7 @@ curl -X POST https://ollama-turbo-agent.liviogama.com/webhooks/github \
 
 3. **Configure Repository**
 
-   Add `.ollama-turbo.yml` to repository root:
+   Add `.overviewer.yml` to repository root:
    ```yaml
    version: "1.0"
    enabled: true
@@ -214,8 +214,8 @@ Comment on issues or PRs:
 
 ### Monitor Operations
 
-- **Dashboard**: https://ollama-turbo-agent.liviogama.com
-- **Health Check**: https://ollama-turbo-agent.liviogama.com/health
+- **Dashboard**: https://overviewer-agent.liviogama.com
+- **Health Check**: https://overviewer-agent.liviogama.com/health
 - **Webhook Status**: GitHub App → Advanced → Recent Deliveries
 
 ## 🔍 **Troubleshooting**

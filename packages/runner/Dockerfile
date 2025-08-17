@@ -2,7 +2,7 @@ FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
-# Copy workspace files  
+# Copy workspace files
 COPY package.json bun.lock ./
 COPY packages/runner/package.json ./packages/runner/
 COPY packages/shared/package.json ./packages/shared/
@@ -34,20 +34,26 @@ RUN curl -fsSL https://ollama.ai/install.sh | sh || true
 
 WORKDIR /app
 
-# Create workspace directory
-RUN mkdir -p /tmp/ollama-turbo-workspaces
-
 # Copy built application and shared package
 COPY --from=builder /app/packages/runner/dist ./dist
 COPY --from=builder /app/packages/runner/package.json ./package.json
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder /app/node_modules ./node_modules
 
+# Create workspace directory and set proper ownership
+RUN mkdir -p /tmp/overviewer-workspaces && \
+    chown -R node:node /tmp/overviewer-workspaces
+
 # Set environment variables
 ENV NODE_ENV=production
-ENV WORKSPACE_ROOT=/tmp/ollama-turbo-workspaces
+ENV WORKSPACE_ROOT=/tmp/overviewer-workspaces
 
 USER node
+
+# Configure git for automated commits as the node user
+RUN git config --global user.email "bot@overviewer-agent.local" && \
+    git config --global user.name "Ollama Turbo Agent Bot" && \
+    git config --global init.defaultBranch main
 
 CMD ["node", "./dist/index.js"]
 

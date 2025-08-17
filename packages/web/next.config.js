@@ -1,11 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@ollama-turbo-agent/shared'],
-  output: 'standalone',
+  transpilePackages: ["@overviewer-agent/shared"],
+  output: "standalone",
   env: {
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://localhost:3000',
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'development-secret-key'
-  }
-}
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL || "http://localhost:3000",
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || "development-secret-key",
+  },
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

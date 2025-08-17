@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "ollama-turbo-agent",
+      "name": "overviewer-agent",
       "devDependencies": {
         "@types/node": "^20.0.0",
         "eslint": "^8.0.0",
@@ -11,7 +11,7 @@
       },
     },
     "packages/backend": {
-      "name": "@ollama-turbo-agent/backend",
+      "name": "@overviewer-agent/backend",
       "version": "0.1.0",
       "dependencies": {
         "@fastify/cors": "^9.0.0",
@@ -20,6 +20,7 @@
         "@octokit/auth-app": "^6.0.0",
         "@octokit/rest": "^20.0.0",
         "@octokit/webhooks": "^12.0.0",
+        "axios": "^1.11.0",
         "crypto": "^1.0.1",
         "drizzle-orm": "^0.29.0",
         "fastify": "^4.24.0",
@@ -39,13 +40,13 @@
       },
     },
     "packages/runner": {
-      "name": "@ollama-turbo-agent/runner",
+      "name": "@overviewer-agent/runner",
       "version": "0.1.0",
       "dependencies": {
         "@octokit/auth-app": "^6.0.0",
         "@octokit/rest": "^20.0.0",
-        "@ollama-turbo-agent/shared": "workspace:*",
-        "axios": "^1.6.0",
+        "@overviewer-agent/shared": "workspace:*",
+        "axios": "^1.11.0",
         "fs-extra": "^11.0.0",
         "redis": "^4.6.0",
         "simple-git": "^3.20.0",
@@ -63,7 +64,7 @@
       },
     },
     "packages/shared": {
-      "name": "@ollama-turbo-agent/shared",
+      "name": "@overviewer-agent/shared",
       "version": "0.1.0",
       "dependencies": {
         "uuid": "^9.0.0",
@@ -78,7 +79,7 @@
       },
     },
     "packages/web": {
-      "name": "@ollama-turbo-agent/web",
+      "name": "@overviewer-agent/web",
       "version": "0.1.0",
       "dependencies": {
         "@auth/drizzle-adapter": "^0.5.0",
@@ -87,8 +88,9 @@
         "@next/font": "^14.0.0",
         "@octokit/auth-oauth-app": "^7.0.0",
         "@octokit/rest": "^20.0.0",
-        "@ollama-turbo-agent/shared": "workspace:*",
+        "@overviewer-agent/shared": "workspace:*",
         "@tailwindcss/postcss": "^4.0.0-beta.3",
+        "axios": "^1.11.0",
         "clsx": "^2.0.0",
         "drizzle-orm": "^0.29.0",
         "next": "^14.0.0",
@@ -307,13 +309,13 @@
 
     "@octokit/webhooks-types": ["@octokit/webhooks-types@7.6.1", "", {}, "sha512-S8u2cJzklBC0FgTwWVLaM8tMrDuDMVE4xiTK4EYXM9GntyvrdbSoxqDQa+Fh57CCNApyIpyeqPhhFEmHPfrXgw=="],
 
-    "@ollama-turbo-agent/backend": ["@ollama-turbo-agent/backend@workspace:packages/backend"],
+    "@overviewer-agent/backend": ["@overviewer-agent/backend@workspace:packages/backend"],
 
-    "@ollama-turbo-agent/runner": ["@ollama-turbo-agent/runner@workspace:packages/runner"],
+    "@overviewer-agent/runner": ["@overviewer-agent/runner@workspace:packages/runner"],
 
-    "@ollama-turbo-agent/shared": ["@ollama-turbo-agent/shared@workspace:packages/shared"],
+    "@overviewer-agent/shared": ["@overviewer-agent/shared@workspace:packages/shared"],
 
-    "@ollama-turbo-agent/web": ["@ollama-turbo-agent/web@workspace:packages/web"],
+    "@overviewer-agent/web": ["@overviewer-agent/web@workspace:packages/web"],
 
     "@panva/hkdf": ["@panva/hkdf@1.2.1", "", {}, "sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw=="],
 

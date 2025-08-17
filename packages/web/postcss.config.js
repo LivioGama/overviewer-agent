@@ -1,7 +1,7 @@
 module.exports = {
   plugins: {
-    '@tailwindcss/postcss': {
-      darkMode: 'class',
+    "@tailwindcss/postcss": {
+      darkMode: "class",
     },
   },
-}
+};

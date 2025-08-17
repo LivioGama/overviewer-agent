@@ -16,7 +16,7 @@ docker-compose up -d
 
 ### 3. ⚙️ Configure Your Repository
 
-Add `.ollama-turbo.yml` to your repository root:
+Add `.overviewer.yml` to your repository root:
 
 ```yaml
 version: "1.0"
@@ -171,6 +171,7 @@ You can still use manual commands in comments:
 /test generate comprehensive unit tests
 /docs add missing documentation
 /security audit for vulnerabilities
+/quality improve overall code quality
 ```
 
 ## 🔍 Monitoring & Debugging
@@ -197,7 +198,7 @@ Visit your dashboard at `https://your-domain.com` to see:
 
 ### Bot Not Responding to Issues
 1. Check webhook configuration in GitHub App settings
-2. Verify `.ollama-turbo.yml` has `issue_opened` trigger
+2. Verify `.overviewer.yml` has `issue_opened` trigger
 3. Check logs: `docker-compose logs backend`
 
 ### Issues Not Being Processed
@@ -219,7 +220,7 @@ Visit your dashboard at `https://your-domain.com` to see:
 ## 🔒 Security & Permissions
 
 The bot only processes issues when:
-- Repository has proper `.ollama-turbo.yml` configuration  
+- Repository has proper `.overviewer.yml` configuration  
 - User has appropriate permissions
 - Issue meets minimum quality thresholds
 - Rate limits are not exceeded

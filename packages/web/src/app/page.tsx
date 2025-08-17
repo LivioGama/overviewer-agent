@@ -1,5 +1,5 @@
-import { WelcomeScreen } from '@/components/dashboard/WelcomeScreen'
-import { Suspense } from 'react'
+import { WelcomeScreen } from "@/components/dashboard/WelcomeScreen";
+import { Suspense } from "react";
 
 export default function Home() {
   return (
@@ -9,8 +9,9 @@ export default function Home() {
           Ollama Turbo Agent
         </h1>
         <p className="mt-4 text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto transition-colors">
-          AI-powered GitHub automation for code refactoring, testing, documentation, and more.
-          Streamline your development workflow with intelligent automation.
+          AI-powered GitHub automation for code refactoring, testing,
+          documentation, and more. Streamline your development workflow with
+          intelligent automation.
         </p>
       </div>
 
@@ -18,12 +19,12 @@ export default function Home() {
         <DashboardContent />
       </Suspense>
     </div>
-  )
+  );
 }
 
 const DashboardContent = () => {
-  return <WelcomeScreen />
-}
+  return <WelcomeScreen />;
+};
 
 const DashboardSkeleton = () => (
   <div className="space-y-6">
@@ -42,12 +43,13 @@ const DashboardSkeleton = () => (
         <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-1/4 mb-4"></div>
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-4 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            <div
+              key={i}
+              className="h-4 bg-gray-300 dark:bg-gray-600 rounded"
+            ></div>
           ))}
         </div>
       </div>
     </div>
   </div>
-)
-
-
+);

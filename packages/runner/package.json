@@ -1,5 +1,5 @@
 {
-  "name": "@ollama-turbo-agent/runner",
+  "name": "@overviewer-agent/runner",
   "version": "0.1.0",
   "private": true,
   "description": "Task execution engine for running automation jobs",
@@ -12,20 +12,20 @@
     "test": "bun test",
     "lint": "eslint src/**/*.ts",
     "type-check": "tsc --noEmit",
-    "docker:build": "docker build -t ollama-turbo-runner .",
-    "docker:run": "docker run --rm ollama-turbo-runner"
+    "docker:build": "docker build -t overviewer-runner .",
+    "docker:run": "docker run --rm overviewer-runner"
   },
   "dependencies": {
-    "@ollama-turbo-agent/shared": "workspace:*",
-    "@octokit/rest": "^20.0.0",
     "@octokit/auth-app": "^6.0.0",
+    "@octokit/rest": "^20.0.0",
+    "@overviewer-agent/shared": "workspace:*",
+    "axios": "^1.11.0",
+    "fs-extra": "^11.0.0",
     "redis": "^4.6.0",
     "simple-git": "^3.20.0",
-    "axios": "^1.6.0",
-    "zod": "^3.22.0",
     "uuid": "^9.0.0",
-    "fs-extra": "^11.0.0",
-    "yaml": "^2.3.0"
+    "yaml": "^2.3.0",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.0",
@@ -36,5 +36,3 @@
     "@typescript-eslint/parser": "^6.0.0"
   }
 }
-
-

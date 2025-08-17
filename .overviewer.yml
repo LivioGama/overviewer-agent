@@ -1,0 +1,21 @@
+version: "1.0"
+enabled: true
+
+automation:
+  triggers:
+#    - comment      # Manual commands
+    - issue_opened # 🆕 Automatic issue processing
+#    - pr_opened    # Automatic PR review
+
+  issue_processing:
+    enabled: true
+    auto_assign: true
+    initial_comment: true
+    progress_updates: true
+
+  tasks:
+    fix:
+      model: "gpt-oss:120b"
+      max_tokens: 3000
+      timeout: 300
+      auto_fix: true

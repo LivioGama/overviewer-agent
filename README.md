@@ -77,8 +77,8 @@ A comprehensive GitHub App that leverages AI to automate common development task
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/your-org/ollama-turbo-agent.git
-cd ollama-turbo-agent
+git clone https://github.com/your-org/overviewer-agent.git
+cd overviewer-agent
 
 # Install dependencies
 bun install
@@ -91,7 +91,7 @@ cd packages/shared && bun run build && cd ../..
 
 1. Go to GitHub Settings → Developer settings → GitHub Apps
 2. Create a new GitHub App with these settings:
-   - **Webhook URL**: `https://ollama-turbo-agent.liviogama.com/webhooks/github`
+   - **Webhook URL**: `https://overviewer-agent.liviogama.com/webhooks/github`
    - **Permissions**:
      - Contents: Read & Write
      - Pull requests: Read & Write  
@@ -147,12 +147,12 @@ REDIS_URL=redis://localhost:6379
 OLLAMA_API_URL=http://localhost:11434
 
 # Workspace
-WORKSPACE_ROOT=/tmp/ollama-turbo-workspaces
+WORKSPACE_ROOT=/tmp/overviewer-workspaces
 ```
 
 #### Web (packages/web/.env)
 ```bash
-NEXTAUTH_URL=https://ollama-turbo-agent.liviogama.com
+NEXTAUTH_URL=https://overviewer-agent.liviogama.com
 NEXTAUTH_SECRET=development-secret-key
 
 # GitHub OAuth (optional)
@@ -210,12 +210,12 @@ Comment on GitHub issues or pull requests with these commands:
 - `/test` - Generate comprehensive unit tests
 - `/docs` - Add or update documentation
 - `/security` - Run security audit and fixes
-- `/fix [description]` - Fix bugs with AI assistance  
+- `/fix [description]` - Fix bugs with AI assistance
 - `/quality` - Improve overall code quality
 
 ### Repository Configuration
 
-Add `.ollama-turbo.yml` to your repository root:
+Add `.overviewer.yml` to your repository root:
 
 ```yaml
 automation:
@@ -255,7 +255,7 @@ automation:
 ### Project Structure
 
 ```
-ollama-turbo-agent/
+overviewer-agent/
 ├── packages/
 │   ├── backend/           # Fastify API server
 │   │   ├── src/
@@ -340,7 +340,7 @@ docker-compose down
 ```bash
 # Build runner image
 cd packages/runner
-docker build -t ollama-turbo-runner .
+docker build -t overviewer-runner .
 
 # Run runner container
 docker run -d \
@@ -348,7 +348,7 @@ docker run -d \
   -e REDIS_URL=redis://redis:6379 \
   -e GITHUB_APP_ID=your_app_id \
   -e GITHUB_APP_PRIVATE_KEY="$(cat private-key.pem)" \
-  ollama-turbo-runner
+  overviewer-runner
 ```
 
 ## 🔐 Security
@@ -421,12 +421,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 🌐 [Live Demo](https://ollama-turbo-agent.liviogama.com)
-- 📖 [Documentation](https://ollama-turbo-agent.liviogama.com/docs)
-- 🐛 [Issue Tracker](https://github.com/your-org/ollama-turbo-agent/issues)
-- 💬 [Discussions](https://github.com/your-org/ollama-turbo-agent/discussions)
+- 🌐 [Live Demo](https://overviewer-agent.liviogama.com)
+- 📖 [Documentation](https://overviewer-agent.liviogama.com/docs)
+- 🐛 [Issue Tracker](https://github.com/your-org/overviewer-agent/issues)
+- 💬 [Discussions](https://github.com/your-org/overviewer-agent/discussions)
 - 📧 [Email Support](mailto:support@liviogama.com)
 
 ---
 
 **Built with ❤️ by the Ollama Turbo Agent team**
+
+https://cookbook.openai.com/examples/structured_outputs_multi_agent

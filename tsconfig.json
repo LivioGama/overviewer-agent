@@ -30,8 +30,8 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@ollama-turbo-agent/shared": ["./packages/shared/src"],
-      "@ollama-turbo-agent/shared/*": ["./packages/shared/src/*"]
+      "@overviewer-agent/shared": ["./packages/shared/src"],
+      "@overviewer-agent/shared/*": ["./packages/shared/src/*"]
     }
   },
   "exclude": [
