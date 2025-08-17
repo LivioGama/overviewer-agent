@@ -1,34 +1,38 @@
 ```ts
+/*────────────────────────────────────────────────────────────────────────────*/
+/*  Server entry‑point for the Ollama Turbo Agent backend                      */
+/*────────────────────────────────────────────────────────────────────────────*/
+
 import Fastify, {
   FastifyInstance,
   FastifyError,
   FastifyReply,
   FastifyRequest,
-} from "fastify";
-import cors from "@fastify/cors";
-import helmet from "@fastify/helmet";
-import rateLimit from "@fastify/rate-limit";
+} from 'fastify';
+import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 
-import { env } from "./apps/backend/config/env.js";
-import { authRoutes } from "./apps/backend/routes/auth.js";
-import { jobRoutes } from "./apps/backend/routes/jobs.js";
-import { webhookRoutes } from "./apps/backend/routes/webhooks.js";
-import { queueService } from "./apps/backend/services/queue.js";
+import { env } from './apps/backend/config/env.js';
+import { authRoutes } from './apps/backend/routes/auth.js';
+import { jobRoutes } from './apps/backend/routes/jobs.js';
+import { webhookRoutes } from './apps/backend/routes/webhooks.js';
+import { queueService } from './apps/backend/services/queue.js';
 
-/* -------------------------------------------------------------------------- */
-/*                               Server Factory                                */
-/* -------------------------------------------------------------------------- */
+/*───────────────────────────────────────*/
+/*  Server factory                       */
+/*───────────────────────────────────────*/
 function createServer(): FastifyInstance {
-  const isDev = env.NODE_ENV === "development";
+  const isDev = env.NODE_ENV === 'development';
 
   const logger = {
     level: env.LOG_LEVEL,
     ...(isDev && {
       transport: {
-        target: "pino-pretty",
+        target: 'pino-pretty',
         options: {
-          translateTime: "HH:MM:ss Z",
-          ignore: "pid,hostname",
+          translateTime: 'HH:MM:ss Z',
+          ignore: 'pid,hostname',
         },
       },
     }),
@@ -37,14 +41,14 @@ function createServer(): FastifyInstance {
   return Fastify({ logger });
 }
 
-/* -------------------------------------------------------------------------- */
-/*                         Plugin Registration (Async)                         */
-/* -------------------------------------------------------------------------- */
+/*───────────────────────────────────────*/
+/*  Plugin registration (async)           */
+/*───────────────────────────────────────*/
 async function registerPlugins(app: FastifyInstance): Promise<void> {
   await app.register(helmet, { contentSecurityPolicy: false });
 
   await app.register(cors, {
-    origin: env.NODE_ENV === "development",
+    origin: env.NODE_ENV === 'development',
   });
 
   await app.register(rateLimit, {
@@ -53,108 +57,116 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
   });
 }
 
-/* -------------------------------------------------------------------------- */
-/*                          Route Registration (Async)                         */
-/* -------------------------------------------------------------------------- */
+/*───────────────────────────────────────*/
+/*  Route registration (async)            */
+/*───────────────────────────────────────*/
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await app.register(authRoutes);
-  await app.register(webhookRoutes);
-  await app.register(jobRoutes);
+  await Promise.all([
+    app.register(authRoutes),
+    app.register(webhookRoutes),
+    app.register(jobRoutes),
+  ]);
 
-  app.get(
-    "/health",
-    async (_req: FastifyRequest, reply: FastifyReply) => {
-      reply.send({
-        status: "healthy",
-        timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version ?? "0.1.0",
-        environment: env.NODE_ENV,
-      });
-    },
-  );
+  app.get('/health', healthHandler);
 }
 
-/* -------------------------------------------------------------------------- */
-/*                     Global Error‑Handling Middleware (Sync)                 */
-/* -------------------------------------------------------------------------- */
+/** Health‑check endpoint */
+async function healthHandler(
+  _req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  reply.send({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version ?? '0.1.0',
+    environment: env.NODE_ENV,
+  });
+}
+
+/*───────────────────────────────────────*/
+/*  Global error handler (sync)           */
+/*───────────────────────────────────────*/
 function setErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler(
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
+      // Centralised logging
       app.log.error(error);
 
+      // Validation errors (Fastify schema validation)
       if (error.validation) {
-        return reply.status(400).send({
-          error: "Validation error",
-          details: error.validation,
-        });
+        void reply
+          .status(400)
+          .send({ error: 'Validation error', details: error.validation });
+        return;
       }
 
+      // Known client/server errors with explicit status
       if (error.statusCode && error.message) {
-        return reply.status(error.statusCode).send({ error: error.message });
+        void reply.status(error.statusCode).send({ error: error.message });
+        return;
       }
 
-      return reply.status(500).send({ error: "Internal server error" });
+      // Fallback – unexpected runtime errors
+      void reply.status(500).send({ error: 'Internal server error' });
     },
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                        Graceful Shutdown Helper (Async)                     */
-/* -------------------------------------------------------------------------- */
-async function shutdown(app: FastifyInstance): Promise<void> {
-  try {
-    await queueService.disconnect();
-  } finally {
-    await app.close();
-    process.exit(0);
-  }
+/*───────────────────────────────────────*/
+/*  Graceful shutdown helpers             */
+/*───────────────────────────────────────*/
+async function closeResources(app: FastifyInstance): Promise<void> {
+  await queueService.disconnect();
+  await app.close();
 }
 
-/* -------------------------------------------------------------------------- */
-/*                               Server Bootstrap                               */
-/* -------------------------------------------------------------------------- */
+/*───────────────────────────────────────*/
+/*  Application bootstrap                 */
+/*───────────────────────────────────────*/
 async function start(): Promise<void> {
   const app = createServer();
 
-  // Fastify hook – called when Fastify initiates a shutdown (e.g., SIGTERM)
-  app.addHook("onClose", async () => {
+  // Ensure resources are released on Fastify shutdown (e.g., SIGTERM)
+  app.addHook('onClose', async () => {
     await queueService.disconnect();
   });
 
-  // Register everything before accepting traffic
+  // Register core functionality before listening for traffic
   await registerPlugins(app);
   await registerRoutes(app);
   setErrorHandler(app);
 
-  // Background consumer must be ready first
+  // Initialise background consumer first
   await queueService.createConsumerGroup();
 
   const address = await app.listen({
+    host: '0.0.0.0',
     port: env.PORT,
-    host: "0.0.0.0",
   });
 
   app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
   app.log.info(`Environment: ${env.NODE_ENV}`);
   app.log.info(`Log level: ${env.LOG_LEVEL}`);
 
-  // Signal handling – reuse the same Fastify instance
-  const graceful = async (signal: NodeJS.Signals) => {
+  // Graceful termination handling
+  const handleSignal = async (signal: NodeJS.Signals) => {
     app.log.info(`Received ${signal}, commencing graceful shutdown`);
-    await shutdown(app);
+    await closeResources(app);
+    process.exit(0);
   };
 
-  ["SIGINT", "SIGTERM"].forEach((sig) => {
-    process.once(sig as NodeJS.Signals, () => graceful(sig as NodeJS.Signals));
+  ['SIGINT', 'SIGTERM'].forEach((sig) => {
+    process.once(sig as NodeJS.Signals, () => handleSignal(sig as NodeJS.Signals));
   });
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                 Run Entry                                    */
-/* -------------------------------------------------------------------------- */
+/*───────────────────────────────────────*/
+/*  Run entry point                       */
+/*───────────────────────────────────────*/
 start().catch((err) => {
-  // Fallback for unexpected bootstrap errors
-  console.error("Failed to start server:", err);
+  // Unexpected bootstrap failures
+  // eslint-disable-next-line no-console
+  console.error('Failed to start server:', err);
   process.exit(1);
 });
 ```
