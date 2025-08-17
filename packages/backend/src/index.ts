@@ -31,20 +31,18 @@ const SIGNALS = ['SIGINT', 'SIGTERM'] as const satisfies readonly Signal[];
 function createLoggerConfig() {
   const base = { level: env.LOG_LEVEL } as const;
 
-  if (env.NODE_ENV === 'development') {
-    return {
-      ...base,
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          translateTime: 'HH:MM:ss Z',
-          ignore: 'pid,hostname',
+  return env.NODE_ENV === 'development'
+    ? {
+        ...base,
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
         },
-      },
-    };
-  }
-
-  return base;
+      }
+    : base;
 }
 
 /*───────────────────────────────────────*/
@@ -57,7 +55,7 @@ function buildServer(): FastifyInstance {
 /*───────────────────────────────────────*/
 /*  Plugin registration                    */
 /*───────────────────────────────────────*/
-async function registerPlugins(app: FastifyInstance): Promise<void> {
+async function registerPlugins(app: FastifyInstance) {
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: env.NODE_ENV === 'development' });
   await app.register(rateLimit, {
@@ -69,7 +67,7 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
 /*───────────────────────────────────────*/
 /*  Route registration                     */
 /*───────────────────────────────────────*/
-async function registerRoutes(app: FastifyInstance): Promise<void> {
+async function registerRoutes(app: FastifyInstance) {
   await app.register(authRoutes);
   await app.register(webhookRoutes);
   await app.register(jobRoutes);
@@ -82,7 +80,7 @@ async function registerRoutes(app: FastifyInstance): Promise<void> {
 function healthHandler(
   _req: FastifyRequest,
   reply: FastifyReply,
-): void {
+) {
   reply.send({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -94,12 +92,12 @@ function healthHandler(
 /*───────────────────────────────────────*/
 /*  Global error handling                  */
 /*───────────────────────────────────────*/
-function setErrorHandler(app: FastifyInstance): void {
+function setErrorHandler(app: FastifyInstance) {
   app.setErrorHandler(
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Fastify schema validation errors
+      // Validation errors (Fastify schema)
       if (error.validation) {
         void reply.status(400).send({
           error: 'Validation error',
@@ -108,13 +106,13 @@ function setErrorHandler(app: FastifyInstance): void {
         return;
       }
 
-      // Fastify‑thrown HTTP errors (statusCode & message populated)
+      // Fastify‑thrown HTTP errors (statusCode & message)
       if (error.statusCode && error.message) {
         void reply.status(error.statusCode).send({ error: error.message });
         return;
       }
 
-      // Unexpected errors
+      // Fallback – unexpected errors
       void reply.status(500).send({ error: 'Internal server error' });
     },
   );
@@ -123,7 +121,7 @@ function setErrorHandler(app: FastifyInstance): void {
 /*───────────────────────────────────────*/
 /*  Graceful shutdown                      */
 /*───────────────────────────────────────*/
-async function closeResources(app: FastifyInstance): Promise<void> {
+async function closeResources(app: FastifyInstance) {
   const tasks = [
     queueService.disconnect(),
     app.close(),
@@ -141,7 +139,7 @@ async function closeResources(app: FastifyInstance): Promise<void> {
 /*───────────────────────────────────────*/
 /*  Signal handling                        */
 /*───────────────────────────────────────*/
-function registerSignalHandlers(app: FastifyInstance): void {
+function registerSignalHandlers(app: FastifyInstance) {
   for (const sig of SIGNALS) {
     process.once(sig, async () => {
       app.log.info(`Received ${sig}, commencing graceful shutdown`);
@@ -154,13 +152,14 @@ function registerSignalHandlers(app: FastifyInstance): void {
 /*───────────────────────────────────────*/
 /*  Application bootstrap                  */
 /*───────────────────────────────────────*/
-async function bootstrap(): Promise<void> {
+async function bootstrap() {
   const app = buildServer();
 
   await registerPlugins(app);
   await registerRoutes(app);
   setErrorHandler(app);
 
+  // Initialise consumer group before listening
   await queueService.createConsumerGroup();
 
   const address = await app.listen({
@@ -179,8 +178,7 @@ async function bootstrap(): Promise<void> {
 /*  Run entry point                        */
 /*───────────────────────────────────────*/
 bootstrap().catch((err: unknown) => {
-  const logger = console;
-  logger.error('Failed to start server:', err);
+  console.error('Failed to start server:', err);
   process.exit(1);
 });
 ```
