@@ -4,10 +4,11 @@
  * ───────────────────────────────────────────────────────────────────────────── */
 
 import Fastify, {
-  FastifyInstance,
-  FastifyError,
-  FastifyReply,
-  FastifyRequest,
+  type FastifyInstance,
+  type FastifyError,
+  type FastifyReply,
+  type FastifyRequest,
+  type FastifyLoggerOptions,
 } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -30,7 +31,7 @@ type Signal = (typeof SIGNALS)[number];
  * Logger configuration
  * ───────────────────────────────────────────────────────────────────────────── */
 
-function createLoggerConfig(): FastifyInstance['options']['logger'] {
+function createLoggerConfig(): FastifyLoggerOptions {
   const base = { level: env.LOG_LEVEL } as const;
 
   if (env.NODE_ENV !== 'development') {
@@ -75,9 +76,11 @@ async function registerPlugins(app: FastifyInstance): Promise<void> {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 async function registerRoutes(app: FastifyInstance): Promise<void> {
-  await app.register(authRoutes);
-  await app.register(webhookRoutes);
-  await app.register(jobRoutes);
+  await Promise.all([
+    app.register(authRoutes),
+    app.register(webhookRoutes),
+    app.register(jobRoutes),
+  ]);
   app.get('/health', healthHandler);
 }
 
@@ -85,10 +88,7 @@ async function registerRoutes(app: FastifyInstance): Promise<void> {
  * Health‑check handler
  * ───────────────────────────────────────────────────────────────────────────── */
 
-function healthHandler(
-  _req: FastifyRequest,
-  reply: FastifyReply,
-): void {
+function healthHandler(_req: FastifyRequest, reply: FastifyReply): void {
   reply.send({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -108,10 +108,9 @@ function setErrorHandler(app: FastifyInstance): void {
 
       // Validation errors (Fastify schema validation)
       if (error.validation) {
-        void reply.status(400).send({
-          error: 'Validation error',
-          details: error.validation,
-        });
+        void reply
+          .status(400)
+          .send({ error: 'Validation error', details: error.validation });
         return;
       }
 
@@ -151,7 +150,6 @@ async function closeResources(app: FastifyInstance): Promise<void> {
 
 function registerSignalHandlers(app: FastifyInstance): void {
   for (const sig of SIGNALS) {
-    // `once` ensures we react only to the first occurrence
     process.once(sig, async () => {
       app.log.info(`Received ${sig}, initiating graceful shutdown`);
       await closeResources(app);
@@ -167,34 +165,37 @@ function registerSignalHandlers(app: FastifyInstance): void {
 async function bootstrap(): Promise<void> {
   const app = buildServer();
 
-  await registerPlugins(app);
-  await registerRoutes(app);
-  setErrorHandler(app);
+  try {
+    await registerPlugins(app);
+    await registerRoutes(app);
+    setErrorHandler(app);
 
-  // Initialise queue consumer before the HTTP server starts listening
-  await queueService.createConsumerGroup();
+    // Initialise queue consumer before the HTTP server starts listening
+    await queueService.createConsumerGroup();
 
-  await app.ready(); // Ensure all plugins/registrations are complete
+    await app.ready();
 
-  const address = await app.listen({
-    host: '0.0.0.0',
-    port: env.PORT,
-  });
+    const address = await app.listen({
+      host: '0.0.0.0',
+      port: env.PORT,
+    });
 
-  app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
-  app.log.info(`Environment: ${env.NODE_ENV}`);
-  app.log.info(`Log level: ${env.LOG_LEVEL}`);
+    app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
+    app.log.info(`Environment: ${env.NODE_ENV}`);
+    app.log.info(`Log level: ${env.LOG_LEVEL}`);
 
-  registerSignalHandlers(app);
+    registerSignalHandlers(app);
+  } catch (err) {
+    // If Fastify logger is already initialised use it, otherwise fallback to console
+    const logger = app?.log ?? console;
+    logger.error({ err }, 'Failed to start server');
+    process.exit(1);
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Run entry point
  * ───────────────────────────────────────────────────────────────────────────── */
 
-bootstrap().catch((err: unknown) => {
-  // Logger may not be available yet, fallback to console
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+bootstrap();
 ```
