@@ -34,7 +34,9 @@ type Signal = (typeof SIGNALS)[number];
 function createLoggerConfig(): FastifyLoggerOptions {
   const base = { level: env.LOG_LEVEL } as const;
 
-  if (env.NODE_ENV !== 'development') return base;
+  if (env.NODE_ENV !== 'development') {
+    return base;
+  }
 
   return {
     ...base,
@@ -84,10 +86,7 @@ async function registerRoutes(app: FastifyInstance): Promise<void> {
  * Health‑check handler
  * ───────────────────────────────────────────────────────────────────────────── */
 
-function healthHandler(
-  _req: FastifyRequest,
-  reply: FastifyReply,
-): void {
+function healthHandler(_req: FastifyRequest, reply: FastifyReply): void {
   reply.send({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -105,21 +104,22 @@ function setErrorHandler(app: FastifyInstance): void {
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Fastify schema validation errors
+      // Validation errors from schema
       if (error.validation) {
-        void reply
-          .status(400)
-          .send({ error: 'Validation error', details: error.validation });
+        void reply.status(400).send({
+          error: 'Validation error',
+          details: error.validation,
+        });
         return;
       }
 
-      // Fastify‑generated HTTP errors (e.g., NotFound, BadRequest)
+      // Fastify‑generated HTTP errors
       if (error.statusCode && error.message) {
         void reply.status(error.statusCode).send({ error: error.message });
         return;
       }
 
-      // Unexpected errors
+      // Fallback for unexpected errors
       void reply.status(500).send({ error: 'Internal server error' });
     },
   );
@@ -130,19 +130,12 @@ function setErrorHandler(app: FastifyInstance): void {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 async function closeResources(app: FastifyInstance): Promise<void> {
-  const tasks: Promise<unknown>[] = [
-    queueService.disconnect(),
-    app.close(),
-  ];
-
+  const tasks: Promise<unknown>[] = [queueService.disconnect(), app.close()];
   const results = await Promise.allSettled(tasks);
 
   for (const result of results) {
     if (result.status === 'rejected') {
-      app.log.error(
-        { err: result.reason },
-        'Shutdown task failed',
-      );
+      app.log.error({ err: result.reason }, 'Shutdown task failed');
     }
   }
 }
@@ -153,7 +146,7 @@ async function closeResources(app: FastifyInstance): Promise<void> {
 
 function registerSignalHandlers(app: FastifyInstance): void {
   for (const sig of SIGNALS) {
-    process.once(sig as Signal, async () => {
+    process.once(sig, async () => {
       app.log.info(`Received ${sig}, initiating graceful shutdown`);
       await closeResources(app);
       process.exit(0);
@@ -162,17 +155,17 @@ function registerSignalHandlers(app: FastifyInstance): void {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
- * Uncaught errors handling (process‑wide)
+ * Process‑wide error handling
  * ───────────────────────────────────────────────────────────────────────────── */
 
 function registerProcessErrorHandlers(app: FastifyInstance): void {
   process.on('unhandledRejection', (reason) => {
-    app.log.error({ err: reason }, 'Unhandled Promise rejection');
+    app.log.error({ err: reason }, 'Unhandled promise rejection');
   });
 
   process.on('uncaughtException', (err) => {
     app.log.error(err, 'Uncaught exception');
-    // Allow the process to exit after logging.
+    // Ensure the process exits after logging the fatal error.
     process.exit(1);
   });
 }
@@ -190,7 +183,7 @@ async function bootstrap(): Promise<void> {
     setErrorHandler(app);
     registerProcessErrorHandlers(app);
 
-    // Initialise queue consumer before the HTTP server starts listening
+    // Initialise the queue before the HTTP server starts listening
     await queueService.createConsumerGroup();
 
     await app.ready();
@@ -206,10 +199,9 @@ async function bootstrap(): Promise<void> {
 
     registerSignalHandlers(app);
   } catch (err) {
-    // Fastify logger may not be initialised; fallback to console
-    const logger = (app?.log ?? console) as {
-      error: (obj: unknown, msg?: string) => void;
-    };
+    // Fastify logger may not be ready – fallback to console.error
+    const logger =
+      (app?.log ?? console) as { error: (obj: unknown, msg?: string) => void };
     logger.error({ err }, 'Failed to start server');
     process.exit(1);
   }
@@ -219,5 +211,5 @@ async function bootstrap(): Promise<void> {
  * Run entry point
  * ───────────────────────────────────────────────────────────────────────────── */
 
-void bootstrap();
+await bootstrap();
 ```
