@@ -1,7 +1,7 @@
 ```ts
-/*────────────────────────────────────────────────────────────────────────────*/
-/*  Ollama Turbo Agent – Backend entry point                                   */
-/*────────────────────────────────────────────────────────────────────────────*/
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Ollama Turbo Agent – Backend entry point
+ * ───────────────────────────────────────────────────────────────────────────── */
 
 import Fastify, {
   FastifyInstance,
@@ -19,43 +19,47 @@ import { jobRoutes } from './apps/backend/routes/jobs.js';
 import { webhookRoutes } from './apps/backend/routes/webhooks.js';
 import { queueService } from './apps/backend/services/queue.js';
 
-/*───────────────────────────────────────*/
-/*  Types & Constants                      */
-/*───────────────────────────────────────*/
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Types & Constants
+ * ───────────────────────────────────────────────────────────────────────────── */
+
 type Signal = NodeJS.Signals;
 const SIGNALS = ['SIGINT', 'SIGTERM'] as const satisfies readonly Signal[];
 
-/*───────────────────────────────────────*/
-/*  Logger configuration                    */
-/*───────────────────────────────────────*/
-function createLoggerConfig() {
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Logger configuration
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+function createLoggerConfig(): FastifyInstance['options']['logger'] {
   const base = { level: env.LOG_LEVEL } as const;
 
-  return env.NODE_ENV === 'development'
-    ? {
-        ...base,
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
-          },
-        },
-      }
-    : base;
+  if (env.NODE_ENV !== 'development') return base;
+
+  return {
+    ...base,
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        translateTime: 'HH:MM:ss Z',
+        ignore: 'pid,hostname',
+      },
+    },
+  };
 }
 
-/*───────────────────────────────────────*/
-/*  Server factory                         */
-/*───────────────────────────────────────*/
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Server factory
+ * ───────────────────────────────────────────────────────────────────────────── */
+
 function buildServer(): FastifyInstance {
   return Fastify({ logger: createLoggerConfig() });
 }
 
-/*───────────────────────────────────────*/
-/*  Plugin registration                    */
-/*───────────────────────────────────────*/
-async function registerPlugins(app: FastifyInstance) {
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Plugin registration
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+async function registerPlugins(app: FastifyInstance): Promise<void> {
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: env.NODE_ENV === 'development' });
   await app.register(rateLimit, {
@@ -64,23 +68,22 @@ async function registerPlugins(app: FastifyInstance) {
   });
 }
 
-/*───────────────────────────────────────*/
-/*  Route registration                     */
-/*───────────────────────────────────────*/
-async function registerRoutes(app: FastifyInstance) {
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Route registration
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(authRoutes);
   await app.register(webhookRoutes);
   await app.register(jobRoutes);
   app.get('/health', healthHandler);
 }
 
-/*───────────────────────────────────────*/
-/*  Health‑check handler                   */
-/*───────────────────────────────────────*/
-function healthHandler(
-  _req: FastifyRequest,
-  reply: FastifyReply,
-) {
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Health‑check handler
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+function healthHandler(_req: FastifyRequest, reply: FastifyReply): void {
   reply.send({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -89,15 +92,16 @@ function healthHandler(
   });
 }
 
-/*───────────────────────────────────────*/
-/*  Global error handling                  */
-/*───────────────────────────────────────*/
-function setErrorHandler(app: FastifyInstance) {
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Global error handling
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+function setErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler(
     (error: FastifyError, _req: FastifyRequest, reply: FastifyReply) => {
       app.log.error(error);
 
-      // Validation errors (Fastify schema)
+      // Schema validation errors
       if (error.validation) {
         void reply.status(400).send({
           error: 'Validation error',
@@ -106,28 +110,25 @@ function setErrorHandler(app: FastifyInstance) {
         return;
       }
 
-      // Fastify‑thrown HTTP errors (statusCode & message)
+      // Fastify‑thrown HTTP errors
       if (error.statusCode && error.message) {
         void reply.status(error.statusCode).send({ error: error.message });
         return;
       }
 
-      // Fallback – unexpected errors
+      // Unexpected errors
       void reply.status(500).send({ error: 'Internal server error' });
     },
   );
 }
 
-/*───────────────────────────────────────*/
-/*  Graceful shutdown                      */
-/*───────────────────────────────────────*/
-async function closeResources(app: FastifyInstance) {
-  const tasks = [
-    queueService.disconnect(),
-    app.close(),
-  ];
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Graceful shutdown helpers
+ * ───────────────────────────────────────────────────────────────────────────── */
 
-  const results = await Promise.allSettled(tasks);
+async function closeResources(app: FastifyInstance): Promise<void> {
+  const jobs = [queueService.disconnect(), app.close()];
+  const results = await Promise.allSettled(jobs);
 
   for (const result of results) {
     if (result.status === 'rejected') {
@@ -136,37 +137,35 @@ async function closeResources(app: FastifyInstance) {
   }
 }
 
-/*───────────────────────────────────────*/
-/*  Signal handling                        */
-/*───────────────────────────────────────*/
-function registerSignalHandlers(app: FastifyInstance) {
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Signal handling
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+function registerSignalHandlers(app: FastifyInstance): void {
   for (const sig of SIGNALS) {
     process.once(sig, async () => {
-      app.log.info(`Received ${sig}, commencing graceful shutdown`);
+      app.log.info(`Received ${sig}, initiating graceful shutdown`);
       await closeResources(app);
       process.exit(0);
     });
   }
 }
 
-/*───────────────────────────────────────*/
-/*  Application bootstrap                  */
-/*───────────────────────────────────────*/
-async function bootstrap() {
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Application bootstrap
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+async function bootstrap(): Promise<void> {
   const app = buildServer();
 
   await registerPlugins(app);
   await registerRoutes(app);
   setErrorHandler(app);
 
-  // Initialise consumer group before listening
+  // Prepare queue consumer before listening
   await queueService.createConsumerGroup();
 
-  const address = await app.listen({
-    host: '0.0.0.0',
-    port: env.PORT,
-  });
-
+  const address = await app.listen({ host: '0.0.0.0', port: env.PORT });
   app.log.info(`Ollama Turbo Agent backend listening at ${address}`);
   app.log.info(`Environment: ${env.NODE_ENV}`);
   app.log.info(`Log level: ${env.LOG_LEVEL}`);
@@ -174,10 +173,12 @@ async function bootstrap() {
   registerSignalHandlers(app);
 }
 
-/*───────────────────────────────────────*/
-/*  Run entry point                        */
-/*───────────────────────────────────────*/
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Run entry point
+ * ───────────────────────────────────────────────────────────────────────────── */
+
 bootstrap().catch((err: unknown) => {
+  // Using console.error as logger may not be available at this stage
   console.error('Failed to start server:', err);
   process.exit(1);
 });
