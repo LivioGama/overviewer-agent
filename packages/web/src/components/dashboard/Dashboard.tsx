@@ -1,6 +1,6 @@
 "use client";
 
-import { Job } from "@ollama-turbo-agent/shared";
+import { Job } from "@overviewer-agent/shared";
 import axios from "axios";
 import { useEffect, useState } from "react";
 
