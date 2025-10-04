@@ -22,7 +22,7 @@ export interface TaskResult {
 export abstract class BaseTask {
   protected workspace = "";
   protected octokit: Octokit | undefined;
-  protected ollama: any;
+  protected openai: any;
 
   abstract execute(
     job: Job,
@@ -60,7 +60,7 @@ export abstract class BaseTask {
     for (const filePath of filesToCheck.slice(0, 5)) {
       try {
         await this.removeCommentsFromFile(filePath);
-        if (this.ollama) await this.improveCodeQualityInline(filePath);
+        if (this.openai) await this.improveCodeQualityInline(filePath);
       } catch {}
     }
   }
@@ -138,11 +138,11 @@ export abstract class BaseTask {
 
       const hasQualityIssues = !this.hasGoodQuality(content);
       if (!hasQualityIssues) return;
-      if (!this.ollama) return;
+      if (!this.openai) return;
 
-      const improvedContent = await this.ollama.improveCodeQuality(
+      const improvedContent = await this.openai.generateCodeRefactoring(
         content,
-        "gpt-oss:120b",
+        "Improve code quality and remove unnecessary comments",
       );
 
       if (this.isImprovement(content, improvedContent)) {

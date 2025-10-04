@@ -26,11 +26,8 @@ RUN bunx tsc
 
 FROM node:20-alpine AS runner
 
-# Install system dependencies
 RUN apk add --no-cache git openssh-client curl
 
-# Install Ollama CLI (optional, for local development)
-RUN curl -fsSL https://ollama.ai/install.sh | sh || true
 
 WORKDIR /app
 

@@ -1,5 +1,5 @@
 # .overviewer.yml - Repository Configuration
-# Place this file in your repository root to configure Ollama Turbo Agent
+# Place this file in your repository root to configure Overviewer Agent
 # Documentation: https://overviewer-agent.liviogama.com/docs
 version: "1.0"
 enabled: true
@@ -12,46 +12,46 @@ automation:
     - pr_opened    # Automatically on PR creation
     # - schedule   # Scheduled automation (future)
     # - push       # On push to main branch (future)
-  
+
   # Issue processing configuration
   issue_processing:
     enabled: true
     auto_assign: true
     initial_comment: true
     progress_updates: true
-  
+
   # Task configurations
   tasks:
     refactor:
-      model: "gpt-oss:120b"
+      model: "gpt-4o"
       max_tokens: 4000
       timeout: 300
       auto_fix: true
-    
+
     test:
-      model: "gpt-oss:120b"
+      model: "gpt-4o"
       max_tokens: 2000
       timeout: 180
       auto_fix: true
-    
+
     docs:
-      model: "gpt-oss:120b"
+      model: "gpt-4o"
       max_tokens: 3000
       timeout: 240
       auto_fix: false
-    
+
     security:
-      model: "gpt-oss:120b"
+      model: "gpt-4o"
       max_tokens: 4000
       timeout: 300
       report_only: false
-    
+
     fix:
-      model: "gpt-oss:120b"
+      model: "gpt-4o"
       max_tokens: 3000
       timeout: 300
       auto_fix: true
-    
+
     quality:
       model: "gpt-oss:120b"
       max_tokens: 3000
@@ -63,14 +63,14 @@ automation:
     required: true           # Require approval before applying changes
     maintainers_only: true   # Only repo maintainers can approve
     # reviewers: ["user1", "user2"]  # Specific reviewers (optional)
-  
+
   # Output configuration
   output:
     open_pr: true           # Create pull requests for changes
     push_direct: false      # Don't push directly to main branch
     create_branch: true     # Create feature branches
     branch_prefix: "automation/"  # Branch name prefix
-  
+
   # Rate limiting
   rate_limits:
     max_jobs_per_hour: 10   # Maximum jobs per hour

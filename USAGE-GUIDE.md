@@ -208,7 +208,7 @@ Visit your dashboard at `https://your-domain.com` to see:
 
 ### PR Creation Failing
 1. Check repository permissions for the GitHub App
-2. Verify Ollama service is running: `docker-compose logs ollama`
+2. Verify services are running: `docker-compose ps`
 3. Check runner logs: `docker-compose logs runner`
 
 ## ⚡ Performance Tips

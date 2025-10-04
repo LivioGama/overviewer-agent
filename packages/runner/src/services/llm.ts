@@ -56,23 +56,9 @@ export class LLMService {
   private model: string;
 
   constructor() {
-    this.apiKey =
-      process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || "";
-    this.baseUrl = this.getBaseUrl();
-    this.model = this.getModel();
-  }
-
-  private getBaseUrl(): string {
-    if (process.env.OPENAI_API_KEY) return "https://api.openai.com/v1";
-    if (process.env.ANTHROPIC_API_KEY) return "https://api.anthropic.com/v1";
-    if (process.env.OLLAMA_URL) return process.env.OLLAMA_URL;
-    return "http://localhost:11434";
-  }
-
-  private getModel(): string {
-    if (process.env.OPENAI_API_KEY) return "gpt-4o";
-    if (process.env.ANTHROPIC_API_KEY) return "claude-3-5-sonnet-20241022";
-    return "llama3.1:70b";
+    this.apiKey = process.env.OPENAI_API_KEY || "";
+    this.baseUrl = "https://api.openai.com/v1";
+    this.model = "gpt-4o";
   }
 
   async analyzeIssue(
@@ -199,13 +185,7 @@ Use GitHub markdown formatting.`;
 
   private async callLLM(prompt: string): Promise<string> {
     try {
-      if (this.baseUrl.includes("openai.com")) {
-        return await this.callOpenAI(prompt);
-      } else if (this.baseUrl.includes("anthropic.com")) {
-        return await this.callAnthropic(prompt);
-      } else {
-        return await this.callOllama(prompt);
-      }
+      return await this.callOpenAI(prompt);
     } catch (error) {
       console.error("LLM API call failed:", error);
       throw new Error(
@@ -232,41 +212,6 @@ Use GitHub markdown formatting.`;
     );
 
     return response.data.choices[0].message.content;
-  }
-
-  private async callAnthropic(prompt: string): Promise<string> {
-    const response = await axios.post(
-      `${this.baseUrl}/messages`,
-      {
-        model: this.model,
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 4000,
-        temperature: 0.1,
-      },
-      {
-        headers: {
-          "x-api-key": this.apiKey,
-          "Content-Type": "application/json",
-          "anthropic-version": "2023-06-01",
-        },
-      },
-    );
-
-    return response.data.content[0].text;
-  }
-
-  private async callOllama(prompt: string): Promise<string> {
-    const response = await axios.post(`${this.baseUrl}/api/generate`, {
-      model: this.model,
-      prompt,
-      stream: false,
-      options: {
-        temperature: 0.1,
-        num_predict: 4000,
-      },
-    });
-
-    return response.data.response;
   }
 
   private formatCodeContext(context: CodeContext): string {

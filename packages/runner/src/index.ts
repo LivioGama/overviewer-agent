@@ -4,12 +4,13 @@ const runner = new RunnerService();
 
 const start = async () => {
   try {
-    console.log("Starting Ollama Turbo Agent Runner...");
+    console.log("Starting Overviewer Agent Runner...");
 
     const requiredEnvVars = [
       "REDIS_URL",
       "GITHUB_APP_ID",
       "GITHUB_APP_PRIVATE_KEY",
+      "OPENAI_API_KEY",
     ];
 
     for (const envVar of requiredEnvVars) {

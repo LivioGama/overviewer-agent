@@ -57,13 +57,13 @@ GITHUB_CLIENT_ID=your_client_id
 GITHUB_CLIENT_SECRET=your_client_secret
 
 # Database Configuration
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ollama_turbo_agent
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/overviewer_agent
 
 # Redis Configuration  
 REDIS_URL=redis://redis:6379
 
-# Ollama Configuration
-OLLAMA_API_URL=http://ollama:11434
+# OpenAI Configuration
+OPENAI_API_KEY=sk-your-openai-api-key-here
 
 # Authentication
 NEXTAUTH_URL=https://overviewer-agent.liviogama.com
@@ -87,27 +87,7 @@ echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)"
 echo "GITHUB_WEBHOOK_SECRET=\"V6pjTkx(PcDG\\\"bq(2D?Z+akP27Q*O\\\\|vHskr}+(Z/\\\$N_hhqJE\\\$<:tXguM,rgKMC\""
 ```
 
-## 🤖 **3. Ollama Setup**
-
-### Install Ollama
-
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Start Ollama service
-ollama serve &
-
-# Pull required models
-ollama pull codellama
-ollama pull llama2  # Optional
-
-# Verify installation
-ollama list
-curl http://localhost:11434/api/version
-```
-
-## 🐳 **4. Docker Deployment**
+## 🐳 **3. Docker Deployment**
 
 ### Deploy with Docker Compose
 
@@ -122,13 +102,7 @@ cd overviewer-agent
 docker-compose up -d postgres redis
 sleep 30  # Wait for services to start
 
-docker-compose up -d ollama
-sleep 60  # Wait for Ollama to start
-
-# Pull models in container
-docker-compose exec ollama ollama pull codellama
-
-# Deploy application services
+# Deploy application services (backend, runner, web)
 docker-compose up -d backend runner web
 
 # Check deployment
@@ -247,7 +221,7 @@ docker-compose exec ollama ollama run codellama "console.log('test')"
 **Database Connection:**
 ```bash
 # Check database
-docker-compose exec postgres psql -U postgres -d ollama_turbo_agent -c "\dt"
+docker-compose exec postgres psql -U postgres -d overviewer_agent -c "\dt"
 
 # Run migrations
 docker-compose exec backend bun run db:migrate
@@ -267,4 +241,4 @@ The application runs on custom ports:
 - **Web Dashboard**: http://localhost:1435
 - **Backend API**: http://localhost:1434
 
-🎉 **Your Ollama Turbo Agent is now deployed and ready!**
+🎉 **Your Overviewer Agent is now deployed and ready!**

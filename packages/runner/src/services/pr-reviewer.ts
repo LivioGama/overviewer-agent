@@ -1,6 +1,6 @@
 import type { Octokit } from "@octokit/rest";
 import type { Job } from "@overviewer-agent/shared";
-import type { OllamaService } from "./ollama.js";
+import type { OpenAIService } from "./openai.js";
 
 export interface ReviewResult {
   approved: boolean;
@@ -19,7 +19,7 @@ export interface ReviewComment {
 
 export class PRReviewerService {
   constructor(
-    private ollama: OllamaService,
+    private openai: OpenAIService,
     private octokit: Octokit,
   ) {}
 
@@ -95,11 +95,18 @@ export class PRReviewerService {
     );
 
     try {
-      const analysis = await this.ollama.generate({
-        model: job?.taskParams.model || "gpt-oss:120b",
-        prompt: analysisPrompt,
-        system:
-          "You are an expert code reviewer. Analyze the changes and provide structured feedback in JSON format.",
+      const analysis = await this.openai.generate({
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert code reviewer. Analyze the changes and provide structured feedback in JSON format.",
+          },
+          {
+            role: "user",
+            content: analysisPrompt,
+          },
+        ],
       });
 
       return this.parseAnalysisResult(analysis, changes);
@@ -362,6 +369,6 @@ ${
 }
 
 export const createPRReviewerService = (
-  ollama: OllamaService,
+  openai: OpenAIService,
   octokit: Octokit,
-) => new PRReviewerService(ollama, octokit);
+) => new PRReviewerService(openai, octokit);

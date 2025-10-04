@@ -3,7 +3,7 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: ollama_turbo_agent
+      POSTGRES_DB: overviewer_agent
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -51,11 +51,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ollama_turbo_agent
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/overviewer_agent
       - REDIS_URL=redis://redis:6379
-      - OLLAMA_API_URL=https://ollama.com
-      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
-      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
@@ -80,8 +78,7 @@ services:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - OLLAMA_API_URL=https://ollama.com
-      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
-      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
       - WORKSPACE_ROOT=/tmp/overviewer-workspaces
     volumes:

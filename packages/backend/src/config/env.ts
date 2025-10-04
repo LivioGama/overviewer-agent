@@ -20,8 +20,7 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
 
-  OLLAMA_API_URL: z.string().url().default("https://ollama.com"),
-  OLLAMA_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().min(1),
 
   AWS_REGION: z.string().default("us-east-1"),
   AWS_ACCESS_KEY_ID: z.string().optional(),
