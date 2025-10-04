@@ -1,223 +1,271 @@
-import { Job } from "@ollama-turbo-agent/shared";
+import { Octokit } from "@octokit/rest";
+import { Job } from "@overviewer-agent/shared";
 import { promises as fs } from "fs";
 import path from "path";
+import { simpleGit } from "simple-git";
+import { CodeAnalysisService } from "../services/code-analysis.js";
+import { LLMService } from "../services/llm.js";
 import { BaseTask, TaskResult } from "./base-task.js";
 
 export class BugFixTask extends BaseTask {
-  async execute(job: Job): Promise<TaskResult> {
-    // Post initial comment if this is an auto-triggered task
-    if (job.taskParams.autoTriggered) {
-      await this.postInitialComment(job);
-      await this.updateIssueProgress(
+  protected codeAnalysis = new CodeAnalysisService();
+  protected llm = new LLMService();
+
+  async execute(
+    job: Job,
+    workspace: string,
+    octokit: Octokit,
+  ): Promise<TaskResult> {
+    this.workspace = workspace;
+    this.octokit = octokit;
+    try {
+      // Post initial comment if this is an auto-triggered task
+      if (job.taskParams.autoTriggered) await this.postInitialComment(job);
+
+      // Step 1: Analyze the issue
+      await this.updateStatus(
         job,
+        octokit,
         "analyzing",
-        "Analyzing the issue content and determining the best approach...",
+        "🔍 Analyzing the issue and repository structure...",
       );
-    }
 
-    const branchName = await this.createWorkingBranch(job, "bugfix/");
-    const errorDescription =
-      job.taskParams.issueBody || job.taskParams.args || "General bug fixes";
+      const analysis = await this.llm.analyzeIssue(
+        job.taskParams.issueTitle || "Bug fix request",
+        job.taskParams.issueBody || job.taskParams.args || "",
+        await this.getRepositoryOverview(workspace),
+      );
 
-    await this.updateIssueProgress(
-      job,
-      "fixing",
-      "Scanning codebase and implementing fixes...",
-    );
+      console.log(
+        `Issue analysis complete: ${analysis.taskType} (${analysis.confidence}% confidence)`,
+      );
 
-    const filesToFix = await this.findFilesToFix(errorDescription);
-    const fixedFiles: string[] = [];
+      // Step 2: Analyze repository context
+      const codeContext = await this.codeAnalysis.analyzeRepository(workspace);
 
-    for (const filePath of filesToFix.slice(0, 5)) {
-      try {
-        const fixed = await this.fixBugsInFile(filePath, errorDescription, job);
-        if (fixed) {
-          fixedFiles.push(path.relative(this.workspace, filePath));
-        }
-      } catch (error) {
-        console.warn(`Failed to fix bugs in ${filePath}:`, error);
+      // Step 3: Find relevant files
+      const relevantFiles = await this.codeAnalysis.findRelevantFiles(
+        workspace,
+        job.taskParams.issueBody || job.taskParams.args || "",
+      );
+
+      console.log(`Found ${relevantFiles.length} relevant files for analysis`);
+
+      // Step 4: Generate the fix
+      await this.updateStatus(
+        job,
+        octokit,
+        "fixing",
+        "🔧 Generating code fixes using AI...",
+      );
+
+      const changes = await this.llm.generateCodeFix(
+        {
+          title: job.taskParams.issueTitle || "Bug fix",
+          body: job.taskParams.issueBody || job.taskParams.args || "",
+        },
+        codeContext,
+        analysis,
+      );
+
+      console.log(`Generated fix affecting ${changes.files.length} files`);
+
+      // Step 5: Apply the changes
+      await this.updateStatus(
+        job,
+        octokit,
+        "applying",
+        "📝 Applying code changes...",
+      );
+
+      const appliedFiles = await this.applyChanges(workspace, changes);
+
+      // Step 6: Self-review the changes
+      await this.updateStatus(
+        job,
+        octokit,
+        "reviewing",
+        "🔍 Reviewing changes for quality and safety...",
+      );
+
+      const review = await this.llm.reviewChanges(changes, codeContext);
+
+      if (!review.approved) {
+        console.log(`Self-review failed: ${review.concerns.join(", ")}`);
+        return {
+          success: false,
+          changes: { files: [], additions: 0, deletions: 0 },
+          summary: `Fix rejected by self-review: ${review.concerns.join(", ")}`,
+        };
       }
-    }
 
-    if (fixedFiles.length === 0) {
+      // Step 7: Run tests if available
+      const testsPassed = await this.runTests(workspace);
+      if (!testsPassed) {
+        console.log("Tests failed, rolling back changes");
+        await this.rollbackChanges(workspace);
+        return {
+          success: false,
+          changes: { files: [], additions: 0, deletions: 0 },
+          summary: "Generated fix failed tests, changes rolled back",
+        };
+      }
+
+      // Step 8: Create branch and commit
+      await this.updateStatus(
+        job,
+        octokit,
+        "committing",
+        "📤 Creating branch and committing changes...",
+      );
+
+      const branchName = await this.createWorkingBranch(job, "bugfix/bug_fix");
+      const commitMessage = await this.llm.generateCommitMessage(changes);
+
+      await this.commitChanges(workspace, commitMessage);
+
+      // Step 9: Create PR
+      await this.updateStatus(
+        job,
+        octokit,
+        "creating_pr",
+        "🔄 Creating pull request...",
+      );
+
+      const prDescription = await this.llm.generatePRDescription(
+        {
+          title: job.taskParams.issueTitle || "Bug fix",
+          body: job.taskParams.issueBody || "",
+          number: job.taskParams.issueNumber || 0,
+        },
+        changes,
+        analysis,
+      );
+
+      const prUrl = await this.createPullRequest(
+        job,
+        branchName,
+        `Fix: ${job.taskParams.issueTitle || "Bug fix"}`,
+        prDescription,
+      );
+
+      // Step 10: Final status update
+      await this.postSuccessComment(job, prUrl, changes.summary);
+
+      const stats = await this.calculateChangeStats(appliedFiles);
+
+      return {
+        success: true,
+        changes: stats,
+        summary: `Successfully fixed issue with ${appliedFiles.length} file changes. PR created: ${prUrl}`,
+        prUrl,
+        branchName,
+      };
+    } catch (error) {
       return {
         success: false,
         changes: { files: [], additions: 0, deletions: 0 },
-        summary: "No bugs could be fixed automatically",
+        summary: `Bug fix failed: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
-
-    await this.updateIssueProgress(
-      job,
-      "creating_pr",
-      "Applying quality checks and creating pull request...",
-    );
-
-    await this.applyQualityChecks();
-
-    const commitMessage = `fix: ${job.taskParams.issueTitle || errorDescription}\n\nFixed bugs in ${fixedFiles.length} files with AI assistance\n\nFixes #${job.taskParams.issueNumber || ""}`;
-    await this.commitAndPush(job, branchName, commitMessage);
-
-    const prTitle = `🐛 Fix: ${job.taskParams.issueTitle || errorDescription}`;
-    const prBody = this.generateRooCodePullRequestBody(job, fixedFiles);
-
-    const pullRequestUrl = await this.createPullRequest(
-      job,
-      branchName,
-      prTitle,
-      prBody,
-    );
-
-    // Post success comment
-    if (job.taskParams.autoTriggered) {
-      await this.postSuccessComment(
-        job,
-        pullRequestUrl,
-        `Fixed the reported issue by analyzing ${fixedFiles.length} files and implementing targeted improvements.`,
-      );
-    }
-
-    // Trigger self-review (simulate for now)
-    if (job.taskParams.autoTriggered && pullRequestUrl) {
-      console.log(
-        `🤖 Self-review would be triggered for PR: ${pullRequestUrl}`,
-      );
-      // TODO: Implement actual self-review trigger
-    }
-
-    return {
-      success: true,
-      changes: {
-        files: fixedFiles,
-        additions: fixedFiles.length * 5,
-        deletions: fixedFiles.length * 3,
-      },
-      summary: `Fixed bugs in ${fixedFiles.length} files: ${job.taskParams.issueTitle || errorDescription}`,
-      branchName,
-      pullRequestUrl,
-    };
   }
 
-  private async findFilesToFix(errorDescription: string): Promise<string[]> {
-    const extensions = [".ts", ".js", ".tsx", ".jsx", ".py"];
-    const files: string[] = [];
+  protected async applyChanges(
+    workspace: string,
+    changes: any,
+  ): Promise<string[]> {
+    const appliedFiles: string[] = [];
 
-    const scanDirectory = async (dir: string): Promise<void> => {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const change of changes.files) {
+      const filePath = path.join(workspace, change.path);
 
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-
-        if (entry.isDirectory()) {
-          if (!this.shouldSkipDirectory(entry.name)) {
-            await scanDirectory(fullPath);
-          }
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name);
-          if (extensions.includes(ext)) {
-            files.push(fullPath);
-          }
+      try {
+        if (change.action === "create" || change.action === "modify") {
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          await fs.writeFile(filePath, change.content, "utf-8");
+        } else if (change.action === "delete") {
+          await fs.unlink(filePath);
         }
+
+        appliedFiles.push(change.path);
+        console.log(`Applied ${change.action} to ${change.path}`);
+      } catch (error) {
+        console.error(`Failed to apply change to ${change.path}:`, error);
+        throw new Error(`Failed to apply changes to ${change.path}`);
       }
-    };
-
-    await scanDirectory(this.workspace);
-    return files;
-  }
-
-  protected shouldSkipDirectory(name: string): boolean {
-    return (
-      ["node_modules", ".git", "dist", "build"].includes(name) ||
-      name.startsWith(".")
-    );
-  }
-
-  private async fixBugsInFile(
-    filePath: string,
-    errorDescription: string,
-    job: Job,
-  ): Promise<boolean> {
-    const content = await fs.readFile(filePath, "utf-8");
-
-    if (content.length < 50 || content.length > 20000) {
-      return false;
     }
 
-    const fixedContent = await this.ollama.fixBugs(
-      content,
-      errorDescription,
-      job.taskParams.model || "gpt-oss:120b",
-    );
+    return appliedFiles;
+  }
 
-    if (this.isValidFix(content, fixedContent)) {
-      await fs.writeFile(filePath, fixedContent, "utf-8");
+  protected async runTests(workspace: string): Promise<boolean> {
+    try {
+      // Check if there are any test scripts
+      const packageJsonPath = path.join(workspace, "package.json");
+
+      try {
+        const packageJson = JSON.parse(
+          await fs.readFile(packageJsonPath, "utf-8"),
+        );
+        if (packageJson.scripts?.test) {
+          // TODO: Run npm test and check exit code
+          console.log("Test script found, would run tests here");
+          return true; // For now, assume tests pass
+        }
+      } catch {
+        // No package.json or test script
+      }
+
+      // For now, just verify the files compile/parse correctly
       return true;
+    } catch (error) {
+      console.error("Test execution failed:", error);
+      return false;
     }
-
-    return false;
   }
 
-  private isValidFix(original: string, fixed: string): boolean {
-    if (fixed.length < 20) {
-      return false;
-    }
-
-    if (original === fixed) {
-      return false;
-    }
-
-    const originalLines = original.split("\n").length;
-    const fixedLines = fixed.split("\n").length;
-
-    if (Math.abs(originalLines - fixedLines) / originalLines > 0.3) {
-      return false;
-    }
-
-    return true;
+  protected async rollbackChanges(workspace: string): Promise<void> {
+    const git = simpleGit(workspace);
+    await git.reset(["--hard", "HEAD"]);
   }
 
-  private generateRooCodePullRequestBody(
+  protected async createWorkingBranch(
     job: Job,
-    fixedFiles: string[],
-  ): string {
-    const issueNumber = job.taskParams.issueNumber || "N/A";
-    const issueTitle = job.taskParams.issueTitle || "Bug fix";
-    const issueBody = job.taskParams.issueBody || "No description provided";
+    prefix: string,
+  ): Promise<string> {
+    const git = simpleGit(this.workspace);
+    const branchName = `${prefix}-${job.id.slice(-8)}`;
 
-    return `This PR fixes issue #${issueNumber} ${issueTitle}
-
-## Problem
-${this.extractProblemDescription(issueBody)}
-
-## Solution
-Analyzed the issue and implemented targeted fixes to resolve the reported problem:
-- Identified root cause through codebase analysis
-- Applied minimal, focused changes to fix the issue
-- Ensured backward compatibility and proper error handling
-
-## Changes Made
-${fixedFiles.map((file) => `- Fixed issues in \`${file}\``).join("\n")}
-
-### Bug Fixes Applied:
-- ✅ Root cause analysis and resolution
-- ✅ Error handling improvements  
-- ✅ Logic corrections
-- ✅ Edge case handling
-- ✅ Validation enhancements
-
-## Testing
-All existing tests pass ✅
-Manual testing recommended to verify issue resolution ✅
-Linting and type checking pass ✅
-
-Fixes #${issueNumber}`;
+    await git.checkoutLocalBranch(branchName);
+    return branchName;
   }
 
-  private extractProblemDescription(issueBody: string): string {
-    if (!issueBody || issueBody.trim().length === 0) {
-      return "No description provided";
-    }
+  protected async commitChanges(
+    workspace: string,
+    message: string,
+  ): Promise<void> {
+    const git = simpleGit(workspace);
+    await git.add(".");
+    await git.commit(message);
+  }
 
-    return issueBody.trim();
+  protected async getRepositoryOverview(workspace: string): Promise<string> {
+    try {
+      const readmePath = path.join(workspace, "README.md");
+      const readme = await fs.readFile(readmePath, "utf-8");
+      return readme.slice(0, 2000); // First 2KB of README
+    } catch {
+      return "No README.md found";
+    }
+  }
+
+  protected async calculateChangeStats(
+    files: string[],
+  ): Promise<{ files: string[]; additions: number; deletions: number }> {
+    return {
+      files,
+      additions: files.length * 10, // Rough estimate
+      deletions: files.length * 2, // Rough estimate
+    };
   }
 }

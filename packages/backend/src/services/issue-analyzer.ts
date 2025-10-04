@@ -1,4 +1,4 @@
-import type { IssueEvent } from "@ollama-turbo-agent/shared";
+import type { IssueEvent } from "@overviewer-agent/shared";
 
 export interface IssueAnalysis {
   taskType:

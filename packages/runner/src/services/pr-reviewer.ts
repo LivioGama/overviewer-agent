@@ -1,5 +1,5 @@
 import type { Octokit } from "@octokit/rest";
-import type { Job } from "@ollama-turbo-agent/shared";
+import type { Job } from "@overviewer-agent/shared";
 import type { OllamaService } from "./ollama.js";
 
 export interface ReviewResult {

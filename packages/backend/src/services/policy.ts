@@ -2,7 +2,7 @@ import {
   Policy,
   RepoConfig,
   type TriggerTypeType,
-} from "@ollama-turbo-agent/shared";
+} from "@overviewer-agent/shared";
 import { and, eq } from "drizzle-orm";
 import yaml from "yaml";
 import { db } from "../database/connection.js";

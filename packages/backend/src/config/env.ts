@@ -1,4 +1,4 @@
-import { validateEnv } from "@ollama-turbo-agent/shared";
+import { validateEnv } from "@overviewer-agent/shared";
 import { z } from "zod";
 
 const EnvSchema = z.object({

@@ -7,7 +7,7 @@ import {
   type PushEvent,
   type TaskTypeType,
   validateWebhookSignature,
-} from "@ollama-turbo-agent/shared";
+} from "@overviewer-agent/shared";
 import { env } from "../config/env.js";
 import { issueAnalyzerService } from "./issue-analyzer.js";
 import { policyService } from "./policy.js";
@@ -195,7 +195,6 @@ export class WebhookService {
       return { success: true, message: "Ignored non-opened issue event" };
     }
 
-    // Check if we should process this issue
     if (!issueAnalyzerService.shouldProcessIssue(payload)) {
       return {
         success: true,
@@ -208,7 +207,6 @@ export class WebhookService {
     const repoName = payload.repository.name;
     const issueNumber = payload.issue.number;
 
-    // Check repository configuration
     const config = await policyService.getRepositoryConfig(
       installationId,
       repoOwner,
@@ -221,10 +219,8 @@ export class WebhookService {
       };
     }
 
-    // Analyze the issue to determine task type
     const analysis = issueAnalyzerService.analyzeIssue(payload);
 
-    // Queue the appropriate job
     await queueService.enqueueJob({
       installationId,
       repoOwner,

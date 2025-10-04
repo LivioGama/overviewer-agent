@@ -1,4 +1,4 @@
-import type { Job } from "@ollama-turbo-agent/shared";
+import type { Job } from "@overviewer-agent/shared";
 import {
   ERROR_COMMENT_TEMPLATE,
   INITIAL_COMMENT_TEMPLATE,
@@ -6,7 +6,7 @@ import {
   renderTemplate,
   SUCCESS_COMMENT_TEMPLATE,
   type TemplateVariables,
-} from "@ollama-turbo-agent/shared";
+} from "@overviewer-agent/shared";
 import { githubService } from "./github.js";
 import type { IssueAnalysis } from "./issue-analyzer.js";
 

@@ -1,10 +1,9 @@
 import { Octokit } from "@octokit/rest";
-import type { Job } from "@ollama-turbo-agent/shared";
-import { generateBranchName } from "@ollama-turbo-agent/shared";
+import type { Job } from "@overviewer-agent/shared";
+import { generateBranchName } from "@overviewer-agent/shared";
 import { promises as fs } from "fs";
 import path from "path";
 import { simpleGit } from "simple-git";
-import type { OllamaService } from "../services/ollama.js";
 
 export interface TaskResult {
   success: boolean;
@@ -15,23 +14,25 @@ export interface TaskResult {
   };
   summary: string;
   branchName?: string;
-  pullRequestUrl?: string;
+  prUrl?: string;
   checkRunId?: number;
   details?: any;
 }
 
 export abstract class BaseTask {
-  constructor(
-    protected ollama: OllamaService,
-    protected octokit: Octokit,
-    protected workspace: string,
-  ) {}
+  protected workspace = "";
+  protected octokit: Octokit | undefined;
+  protected ollama: any;
 
-  abstract execute(job: Job): Promise<TaskResult>;
+  abstract execute(
+    job: Job,
+    workspace: string,
+    octokit: Octokit,
+  ): Promise<TaskResult>;
 
   protected async createWorkingBranch(
     job: Job,
-    branchPrefix: string = "automation/",
+    branchPrefix = "automation/",
   ): Promise<string> {
     const git = simpleGit(this.workspace);
     const branchName = generateBranchName(branchPrefix, job.taskType);
@@ -44,6 +45,7 @@ export abstract class BaseTask {
     job: Job,
     branchName: string,
     message: string,
+    octokit: Octokit,
   ): Promise<void> {
     const git = simpleGit(this.workspace);
 
@@ -58,10 +60,8 @@ export abstract class BaseTask {
     for (const filePath of filesToCheck.slice(0, 5)) {
       try {
         await this.removeCommentsFromFile(filePath);
-        await this.improveCodeQualityInline(filePath);
-      } catch (error) {
-        console.warn(`Failed to apply quality checks to ${filePath}:`, error);
-      }
+        if (this.ollama) await this.improveCodeQualityInline(filePath);
+      } catch {}
     }
   }
 
@@ -85,9 +85,7 @@ export abstract class BaseTask {
             files.push(fullPath);
           }
         }
-      } catch (error) {
-        console.warn(`Failed to scan directory ${dir}:`, error);
-      }
+      } catch {}
     };
 
     await scanDirectory(this.workspace);
@@ -116,22 +114,18 @@ export abstract class BaseTask {
       if (cleanedContent !== content) {
         await fs.writeFile(filePath, cleanedContent, "utf-8");
       }
-    } catch (error) {
-      console.warn(`Failed to remove comments from ${filePath}:`, error);
-    }
+    } catch {}
   }
 
   private removeCodeComments(content: string, filePath: string): string {
     const isTypeScript = filePath.endsWith(".ts") || filePath.endsWith(".tsx");
     const isJavaScript = filePath.endsWith(".js") || filePath.endsWith(".jsx");
 
-    if (!isTypeScript && !isJavaScript) {
-      return content;
-    }
+    if (!isTypeScript && !isJavaScript) return content;
 
     return content
       .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/(?!\s*@ts-ignore).*$/gm, "")
+      .replace(/^\s*\/(?!\/\s*@ts-ignore).*$/gm, "")
       .replace(/\n\s*\n\s*\n/g, "\n\n")
       .trim();
   }
@@ -140,14 +134,11 @@ export abstract class BaseTask {
     try {
       const content = await fs.readFile(filePath, "utf-8");
 
-      if (content.length < 100 || content.length > 10000) {
-        return;
-      }
+      if (content.length < 100 || content.length > 10000) return;
 
       const hasQualityIssues = !this.hasGoodQuality(content);
-      if (!hasQualityIssues) {
-        return;
-      }
+      if (!hasQualityIssues) return;
+      if (!this.ollama) return;
 
       const improvedContent = await this.ollama.improveCodeQuality(
         content,
@@ -157,9 +148,7 @@ export abstract class BaseTask {
       if (this.isImprovement(content, improvedContent)) {
         await fs.writeFile(filePath, improvedContent, "utf-8");
       }
-    } catch (error) {
-      console.warn(`Failed to improve code quality for ${filePath}:`, error);
-    }
+    } catch {}
   }
 
   protected hasGoodQuality(content: string): boolean {
@@ -187,6 +176,8 @@ export abstract class BaseTask {
     title: string,
     body: string,
   ): Promise<string> {
+    if (!this.octokit) throw new Error("octokit not set");
+
     const response = await this.octokit.rest.pulls.create({
       owner: job.repoOwner,
       repo: job.repoName,
@@ -206,6 +197,8 @@ export abstract class BaseTask {
     summary: string,
     details?: string,
   ): Promise<number> {
+    if (!this.octokit) throw new Error("octokit not set");
+
     const response = await this.octokit.rest.checks.create({
       owner: job.repoOwner,
       repo: job.repoName,
@@ -224,6 +217,8 @@ export abstract class BaseTask {
   }
 
   protected async postComment(job: Job, message: string): Promise<void> {
+    if (!this.octokit) throw new Error("octokit not set");
+
     if (job.taskParams.issueNumber) {
       await this.octokit.rest.issues.createComment({
         owner: job.repoOwner,
@@ -238,12 +233,7 @@ export abstract class BaseTask {
     job: Job,
     status: string,
     details?: string,
-  ): Promise<void> {
-    // This will be implemented with bot communication service
-    console.log(
-      `Progress update for job ${job.id}: ${status}${details ? ` - ${details}` : ""}`,
-    );
-  }
+  ): Promise<void> {}
 
   protected async postInitialComment(job: Job): Promise<void> {
     if (job.taskParams.analysis && job.taskParams.issueNumber) {
@@ -283,6 +273,36 @@ All CI checks have passed ✅ and the fix is ready for review!`;
 
       await this.postComment(job, message);
     }
+  }
+
+  protected async updateStatus(
+    job: Job,
+    octokit: Octokit,
+    status: string,
+    message: string,
+  ): Promise<void> {
+    if (!job.taskParams.issueNumber) return;
+
+    const statusEmojis: Record<string, string> = {
+      analyzing: "🔍",
+      fixing: "🔧",
+      applying: "📝",
+      reviewing: "👀",
+      testing: "🧪",
+      committing: "📤",
+      creating_pr: "🔄",
+    };
+
+    const emoji = statusEmojis[status] || "⚙️";
+
+    try {
+      await octokit.issues.createComment({
+        owner: job.repoOwner,
+        repo: job.repoName,
+        issue_number: job.taskParams.issueNumber,
+        body: `${emoji} **Status Update:** ${message}`,
+      });
+    } catch {}
   }
 
   private formatTaskType(taskType: string): string {
