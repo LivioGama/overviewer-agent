@@ -349,10 +349,33 @@ Use GitHub markdown formatting.`;
         response.match(/```\n([\s\S]*?)\n```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : response;
 
-      return JSON.parse((jsonStr || response).trim());
+      const parsed = JSON.parse((jsonStr || response).trim());
+      
+      return this.ensureDefaults(parsed);
     } catch (error) {
       console.error("Failed to parse LLM response:", response);
       throw new Error("Invalid JSON response from LLM");
     }
+  }
+
+  private ensureDefaults<T>(parsed: any): T {
+    if (parsed.concerns && !Array.isArray(parsed.concerns)) {
+      parsed.concerns = [];
+    }
+    if (parsed.suggestions && !Array.isArray(parsed.suggestions)) {
+      parsed.suggestions = [];
+    }
+    if (parsed.affectedFiles && !Array.isArray(parsed.affectedFiles)) {
+      parsed.affectedFiles = [];
+    }
+    if (parsed.files && !Array.isArray(parsed.files)) {
+      parsed.files = [];
+    }
+    
+    if (!parsed.concerns) parsed.concerns = [];
+    if (!parsed.suggestions) parsed.suggestions = [];
+    if (!parsed.affectedFiles) parsed.affectedFiles = [];
+    
+    return parsed as T;
   }
 }
