@@ -15,7 +15,7 @@ automation:
 
   tasks:
     fix:
-      model: "gpt-oss:120b"
+      model: "gpt-4o"
       max_tokens: 3000
       timeout: 300
       auto_fix: true
