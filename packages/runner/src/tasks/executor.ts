@@ -6,6 +6,7 @@ import { CodeQualityTask } from "./code-quality.js";
 import { DocumentationTask } from "./documentation.js";
 import { RefactorTask } from "./refactor.js";
 import { SecurityAuditTask } from "./security-audit.js";
+import { StructureRefactorTask } from "./structure-refactor.js";
 import { TestGenerationTask } from "./test-generation.js";
 
 export class TaskExecutor {
@@ -17,6 +18,7 @@ export class TaskExecutor {
     this.taskClasses.set("code_quality", CodeQualityTask);
     this.taskClasses.set("documentation", DocumentationTask);
     this.taskClasses.set("refactor", RefactorTask);
+    this.taskClasses.set("structure_refactor", StructureRefactorTask);
     this.taskClasses.set("security_audit", SecurityAuditTask);
     this.taskClasses.set("test_generation", TestGenerationTask);
   }

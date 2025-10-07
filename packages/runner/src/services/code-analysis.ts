@@ -12,8 +12,8 @@ export interface FileInfo {
 }
 
 export class CodeAnalysisService {
-  private readonly maxFileSize = 50000; // 50KB max per file
-  private readonly maxFiles = 20; // Max files to analyze
+  private readonly maxFileSize = 50000;
+  private readonly maxFiles = 50;
   private readonly supportedExtensions = new Set([
     ".js",
     ".ts",
