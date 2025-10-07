@@ -129,6 +129,10 @@ export class QueueService {
     }
   }
 
+  async createConsumerGroup(): Promise<void> {
+    return this.ensureConsumerGroup();
+  }
+
   async getJobsByStatus(status: Job["status"]): Promise<Job[]> {
     await this.connect();
     const keys = await this.client.keys("job:*");
