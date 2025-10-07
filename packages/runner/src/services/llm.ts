@@ -101,7 +101,16 @@ Analyze this issue and provide:
 5. Likely affected files or file patterns
 6. Specific suggestions for resolution
 
-Respond in JSON format matching the IssueAnalysis interface.`;
+IMPORTANT: Respond with valid JSON only, no markdown:
+{
+  "taskType": "bug_fix",
+  "confidence": 85,
+  "description": "Brief description",
+  "priority": "medium",
+  "estimatedComplexity": "moderate",
+  "affectedFiles": ["file1.ts", "file2.ts"],
+  "suggestions": ["suggestion 1", "suggestion 2"]
+}`;
 
     const response = await this.callLLM(prompt, {
       model: this.fastModel,
@@ -147,10 +156,31 @@ Generate the necessary code changes to fix this issue. Focus on:
 3. Maintaining backwards compatibility
 4. Adding appropriate error handling
 
-Respond in JSON format matching the CodeChanges interface.`;
+IMPORTANT: You must respond with valid JSON in this exact format:
+{
+  "files": [
+    {
+      "path": "relative/path/to/file.ts",
+      "content": "full file content here",
+      "action": "modify"
+    }
+  ],
+  "summary": "Brief summary of changes",
+  "reasoning": "Explanation of the fix"
+}
+
+The "action" field must be one of: "create", "modify", or "delete".
+Do not include markdown code blocks, just pure JSON.`;
 
     const response = await this.callLLM(prompt, { maxTokens: 3000 });
-    return this.parseResponse<CodeChanges>(response);
+    console.log("LLM raw response (first 500 chars):", response.slice(0, 500));
+    const parsed = this.parseResponse<CodeChanges>(response);
+    console.log("Parsed CodeChanges:", { 
+      filesCount: parsed.files?.length || 0,
+      hasSummary: !!parsed.summary,
+      hasReasoning: !!parsed.reasoning
+    });
+    return parsed;
   }
 
   async reviewChanges(
@@ -176,7 +206,14 @@ Evaluate:
 5. Test coverage
 6. Whether this should be a draft PR initially
 
-Respond in JSON format matching the ReviewResult interface.`;
+IMPORTANT: Respond with valid JSON only, no markdown:
+{
+  "approved": true,
+  "concerns": ["concern 1", "concern 2"],
+  "suggestions": ["suggestion 1"],
+  "riskLevel": "low",
+  "shouldCreateDraft": false
+}`;
 
     const response = await this.callLLM(prompt, {
       model: this.fastModel,
