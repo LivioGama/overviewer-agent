@@ -4,6 +4,7 @@ export interface IssueAnalysis {
   taskType:
     | "bug_fix"
     | "refactor"
+    | "structure_refactor"
     | "test_generation"
     | "documentation"
     | "security_audit"
@@ -13,8 +14,8 @@ export interface IssueAnalysis {
   summary: string;
   keywords: string[];
   affectedComponents: string[];
-  estimatedEffort: number; // in minutes
-  confidence: number; // 0-100
+  estimatedEffort: number;
+  confidence: number;
 }
 
 export class IssueAnalyzerService {
@@ -95,9 +96,21 @@ export class IssueAnalyzerService {
       return "test_generation";
     }
 
-    // Check title and body for keywords
     const combined = `${title} ${body}`;
 
+    const structureRefactorKeywords = [
+      "move",
+      "rename",
+      "relocate",
+      "restructure",
+      "reorganize",
+      "migrate",
+      "directory",
+      "folder",
+      "packages",
+      "→",
+      "->",
+    ];
     const bugKeywords = [
       "bug",
       "error",
@@ -150,6 +163,15 @@ export class IssueAnalyzerService {
       "code quality",
     ];
 
+    if (this.containsKeywords(combined, structureRefactorKeywords)) {
+      const hasDirectoryPattern = /(?:move|rename|relocate)\s+(?:the\s+)?([^\s]+)\s+(?:directory|folder|package)?\s*(?:to|→|->)\s*([^\s]+)/i.test(
+        combined,
+      );
+      if (hasDirectoryPattern) {
+        return "structure_refactor";
+      }
+    }
+
     if (this.containsKeywords(combined, bugKeywords)) {
       return "bug_fix";
     }
@@ -169,7 +191,6 @@ export class IssueAnalyzerService {
       return "refactor";
     }
 
-    // Default to bug_fix for unclassified issues
     return "bug_fix";
   }
 
@@ -291,6 +312,7 @@ export class IssueAnalyzerService {
     const taskTypeMap = {
       bug_fix: "a bug fix",
       refactor: "code refactoring",
+      structure_refactor: "directory restructuring",
       test_generation: "test creation",
       documentation: "documentation updates",
       security_audit: "security improvements",
@@ -304,6 +326,7 @@ export class IssueAnalyzerService {
     const baseEffort = {
       bug_fix: 30,
       refactor: 45,
+      structure_refactor: 20,
       test_generation: 25,
       documentation: 20,
       security_audit: 60,
@@ -328,6 +351,7 @@ export class IssueAnalyzerService {
     const relevantKeywords = {
       bug_fix: ["bug", "error", "issue", "problem", "broken", "fail"],
       refactor: ["refactor", "improve", "optimize", "enhance"],
+      structure_refactor: ["move", "rename", "relocate", "restructure"],
       test_generation: ["test", "testing", "coverage"],
       documentation: ["documentation", "docs"],
       security_audit: ["security", "vulnerability"],

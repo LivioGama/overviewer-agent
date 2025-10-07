@@ -21,6 +21,7 @@ export const TriggerType = z.enum([
 
 export const TaskType = z.enum([
   "refactor",
+  "structure_refactor",
   "test_generation",
   "documentation",
   "dependency_update",

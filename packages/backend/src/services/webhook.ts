@@ -283,6 +283,8 @@ export class WebhookService {
   private mapCommandToTaskType(command: string): string | null {
     const commandMap: Record<string, string> = {
       refactor: "refactor",
+      move: "structure_refactor",
+      restructure: "structure_refactor",
       test: "test_generation",
       docs: "documentation",
       fix: "bug_fix",
