@@ -1,0 +1,1 @@
+// Original content from packages/backend/src/middleware/auth.ts
