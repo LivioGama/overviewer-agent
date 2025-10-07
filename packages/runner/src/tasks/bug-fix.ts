@@ -30,26 +30,19 @@ export class BugFixTask extends BaseTask {
         "🔍 Analyzing the issue and repository structure...",
       );
 
+      const issueDescription =
+        job.taskParams.issueBody || job.taskParams.args || "";
+
       const analysis = await this.llm.analyzeIssue(
         job.taskParams.issueTitle || "Bug fix request",
-        job.taskParams.issueBody || job.taskParams.args || "",
+        issueDescription,
         await this.getRepositoryOverview(workspace),
       );
 
-      console.log(
-        `Issue analysis complete: ${analysis.taskType} (${analysis.confidence}% confidence)`,
-      );
-
-      // Step 2: Analyze repository context
-      const codeContext = await this.codeAnalysis.analyzeRepository(workspace);
-
-      // Step 3: Find relevant files
-      const relevantFiles = await this.codeAnalysis.findRelevantFiles(
+      const codeContext = await this.codeAnalysis.analyzeRepository(
         workspace,
-        job.taskParams.issueBody || job.taskParams.args || "",
+        issueDescription,
       );
-
-      console.log(`Found ${relevantFiles.length} relevant files for analysis`);
 
       // Step 4: Generate the fix
       await this.updateStatus(
