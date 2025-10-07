@@ -2,18 +2,17 @@ import axios from "axios";
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
+import { CodeChunk, CodeChunker } from "./code-chunker.js";
 
 interface EmbeddingCache {
-  [fileHash: string]: {
+  [chunkHash: string]: {
     embedding: number[];
     timestamp: number;
-    fileId: string;
+    chunkId: string;
   };
 }
 
-interface FileWithEmbedding {
-  path: string;
-  content: string;
+interface ChunkWithEmbedding extends CodeChunk {
   embedding: number[];
 }
 
@@ -22,16 +21,18 @@ export class EmbeddingService {
   private baseUrl: string;
   private cache: EmbeddingCache = {};
   private cacheFile: string;
-  private model = "text-embedding-3-small";
+  private model = "text-embedding-3-large";
+  private chunker: CodeChunker;
 
   constructor(workspacePath: string) {
     this.apiKey = process.env.OPENAI_API_KEY || "";
     this.baseUrl = "https://api.openai.com/v1";
     this.cacheFile = path.join(workspacePath, ".embedding-cache.json");
+    this.chunker = new CodeChunker();
     this.loadCache();
   }
 
-  async embedText(text: string, fileId: string): Promise<number[]> {
+  async embedText(text: string, chunkId: string): Promise<number[]> {
     const hash = this.hashContent(text);
 
     if (this.cache[hash] && Date.now() - this.cache[hash].timestamp < 86400000) {
@@ -59,7 +60,7 @@ export class EmbeddingService {
       this.cache[hash] = {
         embedding,
         timestamp: Date.now(),
-        fileId,
+        chunkId,
       };
 
       this.saveCache();
@@ -72,32 +73,72 @@ export class EmbeddingService {
 
   async embedFiles(
     files: Array<{ path: string; content: string }>,
-  ): Promise<FileWithEmbedding[]> {
-    const filesWithEmbeddings: FileWithEmbedding[] = [];
+  ): Promise<ChunkWithEmbedding[]> {
+    const allChunks: CodeChunk[] = [];
+
+    for (const file of files) {
+      try {
+        const chunks = await this.chunker.chunkFile(file.path, file.content);
+        allChunks.push(...chunks);
+      } catch (error) {
+        console.error(`Failed to chunk ${file.path}:`, error);
+      }
+    }
+
+    console.log(`Created ${allChunks.length} code chunks from ${files.length} files`);
+
+    const chunksWithEmbeddings: ChunkWithEmbedding[] = [];
 
     const batchSize = 10;
-    for (let i = 0; i < files.length; i += batchSize) {
-      const batch = files.slice(i, i + batchSize);
+    for (let i = 0; i < allChunks.length; i += batchSize) {
+      const batch = allChunks.slice(i, i + batchSize);
 
       const embeddings = await Promise.all(
-        batch.map(async (file) => {
+        batch.map(async (chunk) => {
           try {
-            const textToEmbed = `File: ${file.path}\n\n${file.content.slice(0, 8000)}`;
-            const embedding = await this.embedText(textToEmbed, file.path);
-            return { ...file, embedding };
+            const textToEmbed = this.chunker.formatChunkForContext(chunk);
+            const embedding = await this.embedText(textToEmbed, chunk.id);
+            return { ...chunk, embedding };
           } catch (error) {
-            console.error(`Failed to embed file ${file.path}:`, error);
+            console.error(`Failed to embed chunk ${chunk.id}:`, error);
             return null;
           }
         }),
       );
 
-      filesWithEmbeddings.push(
-        ...embeddings.filter((e) => e !== null) as FileWithEmbedding[],
+      chunksWithEmbeddings.push(
+        ...embeddings.filter((e) => e !== null) as ChunkWithEmbedding[],
       );
     }
 
-    return filesWithEmbeddings;
+    return chunksWithEmbeddings;
+  }
+
+  async findRelevantChunks(
+    issueDescription: string,
+    files: Array<{ path: string; content: string }>,
+    topK = 10,
+  ): Promise<
+    Array<{
+      chunk: CodeChunk;
+      score: number;
+    }>
+  > {
+    const issueEmbedding = await this.embedText(
+      issueDescription,
+      "query:" + this.hashContent(issueDescription),
+    );
+
+    const chunksWithEmbeddings = await this.embedFiles(files);
+
+    const scoredChunks = chunksWithEmbeddings.map((chunk) => ({
+      chunk,
+      score: this.cosineSimilarity(issueEmbedding, chunk.embedding),
+    }));
+
+    const topChunks = scoredChunks.sort((a, b) => b.score - a.score).slice(0, topK);
+
+    return topChunks;
   }
 
   async findRelevantFiles(
@@ -105,20 +146,41 @@ export class EmbeddingService {
     files: Array<{ path: string; content: string }>,
     topK = 5,
   ): Promise<Array<{ path: string; content: string; score: number }>> {
-    const issueEmbedding = await this.embedText(
+    const topChunks = await this.findRelevantChunks(
       issueDescription,
-      "query:" + this.hashContent(issueDescription),
+      files,
+      topK * 2,
     );
 
-    const filesWithEmbeddings = await this.embedFiles(files);
+    const fileScores = new Map<string, { score: number; chunks: CodeChunk[] }>();
 
-    const scoredFiles = filesWithEmbeddings.map((file) => ({
-      path: file.path,
-      content: file.content,
-      score: this.cosineSimilarity(issueEmbedding, file.embedding),
-    }));
+    topChunks.forEach(({ chunk, score }) => {
+      const existing = fileScores.get(chunk.filePath);
+      if (existing) {
+        existing.score = Math.max(existing.score, score);
+        existing.chunks.push(chunk);
+      } else {
+        fileScores.set(chunk.filePath, { score, chunks: [chunk] });
+      }
+    });
 
-    return scoredFiles.sort((a, b) => b.score - a.score).slice(0, topK);
+    const rankedFiles = Array.from(fileScores.entries())
+      .sort((a, b) => b[1].score - a[1].score)
+      .slice(0, topK);
+
+    return rankedFiles.map(([filePath, { score, chunks }]) => {
+      const file = files.find((f) => f.path === filePath);
+      const relevantContent = chunks
+        .sort((a, b) => a.startLine - b.startLine)
+        .map((c) => `\n${c.name}\n${c.content}`)
+        .join("\n");
+
+      return {
+        path: filePath,
+        content: relevantContent || file?.content || "",
+        score,
+      };
+    });
   }
 
   cosineSimilarity(a: number[], b: number[]): number {
