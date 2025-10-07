@@ -1,45 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "allowJs": true,
-    "checkJs": false,
-    "jsx": "preserve",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "removeComments": false,
-    "noEmit": false,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "incremental": true,
-    "baseUrl": ".",
+    "baseUrl": "./",
     "paths": {
-      "@overviewer-agent/shared": ["./packages/shared/src"],
-      "@overviewer-agent/shared/*": ["./packages/shared/src/*"]
+      "@web/*": ["apps/web/src/*"],
+      "@backend/*": ["apps/backend/src/*"],
+      "@runner/*": ["apps/runner/src/*"]
     }
-  },
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".next",
-    "packages/web"
-  ]
+  }
 }
-
-

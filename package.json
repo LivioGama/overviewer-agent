@@ -1,30 +1,15 @@
 {
-  "name": "overviewer-agent",
-  "version": "0.1.0",
-  "private": true,
-  "description": "GitHub App that runs automation/agent tasks against repositories in the cloud",
-  "workspaces": [
-    "packages/*"
-  ],
+  "name": "project-name",
+  "version": "1.0.0",
   "scripts": {
-    "dev": "bun run --filter=backend dev",
-    "build": "bun run --filter=* build",
-    "test": "bun run --filter=* test",
-    "lint": "bun run --filter=* lint",
-    "type-check": "bun run --filter=* type-check",
-    "db:migrate": "bun run --filter=backend db:migrate",
-    "db:seed": "bun run --filter=backend db:seed"
+    "start:web": "cd apps/web && npm start",
+    "start:backend": "cd apps/backend && npm start",
+    "start:runner": "cd apps/runner && npm start"
   },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0",
-    "prettier": "^3.0.0",
-    "eslint": "^8.0.0"
-  },
-  "engines": {
-    "node": ">=18.0.0",
-    "bun": ">=1.0.0"
+  "dependencies": {
+    "@types/node": "^14.14.31",
+    "typescript": "^4.2.3",
+    "prettier": "^2.2.1",
+    "eslint": "^7.22.0"
   }
 }
-
-
