@@ -54,6 +54,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/overviewer_agent
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
