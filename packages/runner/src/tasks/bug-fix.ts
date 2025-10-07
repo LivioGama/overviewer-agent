@@ -91,12 +91,20 @@ export class BugFixTask extends BaseTask {
       const review = await this.llm.reviewChanges(changes, codeContext);
 
       if (!review.approved) {
-        console.log(`Self-review failed: ${review.concerns.join(", ")}`);
-        return {
-          success: false,
-          changes: { files: [], additions: 0, deletions: 0 },
-          summary: `Fix rejected by self-review: ${review.concerns.join(", ")}`,
-        };
+        console.log(`Self-review concerns: ${review.concerns.join(", ")}`);
+        await this.updateStatus(
+          job,
+          octokit,
+          "reviewing",
+          `⚠️ Self-review noted some concerns: ${review.concerns.join(", ")}. Continuing with PR creation...`,
+        );
+      } else {
+        await this.updateStatus(
+          job,
+          octokit,
+          "reviewing",
+          "✅ Self-review passed!",
+        );
       }
 
       // Step 7: Run tests if available

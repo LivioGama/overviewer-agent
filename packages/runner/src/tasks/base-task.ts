@@ -22,6 +22,7 @@ export interface TaskResult {
 export abstract class BaseTask {
   protected workspace = "";
   protected octokit: Octokit | undefined;
+  private statusCommentId: number | undefined;
   protected openai: any;
 
   abstract execute(
@@ -296,12 +297,24 @@ All CI checks have passed ✅ and the fix is ready for review!`;
     const emoji = statusEmojis[status] || "⚙️";
 
     try {
-      await octokit.issues.createComment({
-        owner: job.repoOwner,
-        repo: job.repoName,
-        issue_number: job.taskParams.issueNumber,
-        body: `${emoji} **Status Update:** ${message}`,
-      });
+      const body = `${emoji} **Status Update:** ${message}`;
+
+      if (this.statusCommentId) {
+        await octokit.rest.issues.updateComment({
+          owner: job.repoOwner,
+          repo: job.repoName,
+          comment_id: this.statusCommentId,
+          body,
+        });
+      } else {
+        const { data } = await octokit.rest.issues.createComment({
+          owner: job.repoOwner,
+          repo: job.repoName,
+          issue_number: job.taskParams.issueNumber,
+          body,
+        });
+        this.statusCommentId = data.id;
+      }
     } catch {}
   }
 
