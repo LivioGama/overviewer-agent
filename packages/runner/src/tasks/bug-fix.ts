@@ -62,16 +62,35 @@ export class BugFixTask extends BaseTask {
       );
 
       if (!changes.files || changes.files.length === 0) {
+        const explanation = changes.reasoning || changes.summary || "No code changes needed";
+        
         await this.updateStatus(
           job,
           octokit,
-          "failed",
-          "❌ Failed to generate code changes. The AI couldn't produce a valid fix.",
+          "completed",
+          `ℹ️ Analysis complete: ${explanation.slice(0, 200)}`,
         );
+        
+        const comment = `## 🤖 Analysis Result
+
+**Summary:** ${changes.summary || "No code changes required"}
+
+**Reasoning:** ${changes.reasoning || "The AI determined that no code modifications are needed for this issue."}
+
+This issue may require:
+- Manual file system operations (moving/renaming files)
+- Configuration changes outside of code files
+- Changes to build/deployment processes
+- No action at all
+
+If you believe code changes are needed, please provide more specific details about what should be modified.`;
+
+        await this.postComment(job, comment);
+        
         return {
-          success: false,
+          success: true,
           changes: { files: [], additions: 0, deletions: 0 },
-          summary: "Failed to generate valid code changes from AI",
+          summary: `No code changes needed: ${explanation.slice(0, 100)}`,
         };
       }
 
