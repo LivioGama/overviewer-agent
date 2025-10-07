@@ -359,6 +359,11 @@ Use GitHub markdown formatting.`;
   }
 
   private ensureDefaults<T>(parsed: any): T {
+    if (!parsed || typeof parsed !== 'object') {
+      console.error("Invalid parsed response, not an object:", parsed);
+      return {} as T;
+    }
+    
     if (parsed.concerns && !Array.isArray(parsed.concerns)) {
       parsed.concerns = [];
     }
@@ -375,6 +380,7 @@ Use GitHub markdown formatting.`;
     if (!parsed.concerns) parsed.concerns = [];
     if (!parsed.suggestions) parsed.suggestions = [];
     if (!parsed.affectedFiles) parsed.affectedFiles = [];
+    if (!parsed.files) parsed.files = [];
     
     return parsed as T;
   }

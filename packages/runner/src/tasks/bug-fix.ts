@@ -61,9 +61,22 @@ export class BugFixTask extends BaseTask {
         analysis,
       );
 
+      if (!changes.files || changes.files.length === 0) {
+        await this.updateStatus(
+          job,
+          octokit,
+          "failed",
+          "❌ Failed to generate code changes. The AI couldn't produce a valid fix.",
+        );
+        return {
+          success: false,
+          changes: { files: [], additions: 0, deletions: 0 },
+          summary: "Failed to generate valid code changes from AI",
+        };
+      }
+
       console.log(`Generated fix affecting ${changes.files.length} files`);
 
-      // Step 5: Apply the changes
       await this.updateStatus(
         job,
         octokit,
@@ -164,10 +177,20 @@ export class BugFixTask extends BaseTask {
         branchName,
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Bug fix task failed:", errorMessage);
+      
+      await this.updateStatus(
+        job,
+        octokit,
+        "failed",
+        `❌ Task failed: ${errorMessage}`,
+      ).catch(err => console.error("Failed to update status:", err));
+      
       return {
         success: false,
         changes: { files: [], additions: 0, deletions: 0 },
-        summary: `Bug fix failed: ${error instanceof Error ? error.message : String(error)}`,
+        summary: `Bug fix failed: ${errorMessage}`,
       };
     }
   }
