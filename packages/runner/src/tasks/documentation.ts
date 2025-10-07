@@ -93,13 +93,28 @@ export class DocumentationTask extends BaseTask {
       const filePath = path.join(workspace, change.path);
       try {
         if (change.action === "create" || change.action === "modify") {
-          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          const dir = path.dirname(filePath);
+          try {
+            await fs.mkdir(dir, { recursive: true });
+          } catch (mkdirError: any) {
+            if (mkdirError.code !== "EEXIST") {
+              throw mkdirError;
+            }
+          }
           await fs.writeFile(filePath, change.content, "utf-8");
         } else if (change.action === "delete") {
-          await fs.unlink(filePath);
+          try {
+            await fs.unlink(filePath);
+          } catch (unlinkError: any) {
+            if (unlinkError.code !== "ENOENT") {
+              throw unlinkError;
+            }
+          }
         }
         appliedFiles.push(change.path);
-      } catch {}
+      } catch (error) {
+        console.error(`Failed to apply change to ${change.path}:`, error);
+      }
     }
     return appliedFiles;
   }
