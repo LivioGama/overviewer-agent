@@ -1,0 +1,1 @@
+// Original content from packages/web/src/components/layout.ts
