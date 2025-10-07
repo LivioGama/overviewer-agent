@@ -16,8 +16,6 @@
     "docker:run": "docker run --rm overviewer-runner"
   },
   "dependencies": {
-    "@babel/parser": "^7.28.4",
-    "@babel/traverse": "^7.28.4",
     "@octokit/auth-app": "^6.0.0",
     "@octokit/rest": "^20.0.0",
     "@overviewer-agent/shared": "workspace:*",
@@ -30,7 +28,6 @@
     "zod": "^3.22.0"
   },
   "devDependencies": {
-    "@types/babel__traverse": "^7.28.0",
     "@types/fs-extra": "^11.0.0",
     "@types/uuid": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",

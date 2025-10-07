@@ -87,4 +87,3 @@ artifacts
 .next
 dist
 tsconfig.tsbuildinfo
-.embedding-cache.json

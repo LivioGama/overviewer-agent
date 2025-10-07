@@ -1,6 +1,5 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { EmbeddingService } from "./embedding.js";
 import { CodeContext } from "./llm.js";
 
 export interface FileInfo {
@@ -13,9 +12,8 @@ export interface FileInfo {
 }
 
 export class CodeAnalysisService {
-  private readonly maxFileSize = 15000;
-  private readonly maxFiles = 8;
-  private embeddingService?: EmbeddingService;
+  private readonly maxFileSize = 50000;
+  private readonly maxFiles = 20;
   private readonly supportedExtensions = new Set([
     ".js",
     ".ts",
@@ -34,20 +32,12 @@ export class CodeAnalysisService {
     ".swift",
   ]);
 
-  async analyzeRepository(
-    workspacePath: string,
-    issueDescription?: string,
-  ): Promise<CodeContext> {
+  async analyzeRepository(workspacePath: string): Promise<CodeContext> {
     const structure = await this.generateDirectoryStructure(workspacePath);
     const dependencies = await this.extractDependencies(workspacePath);
     const testFramework = await this.detectTestFramework(workspacePath);
     const buildTool = await this.detectBuildTool(workspacePath);
-    const files = issueDescription
-      ? await this.getRelevantFilesWithEmbedding(
-          workspacePath,
-          issueDescription,
-        )
-      : await this.getRelevantFiles(workspacePath);
+    const files = await this.getRelevantFiles(workspacePath);
 
     return {
       structure,
@@ -58,126 +48,30 @@ export class CodeAnalysisService {
     };
   }
 
-  private async getRelevantFilesWithEmbedding(
-    workspacePath: string,
-    issueDescription: string,
-  ): Promise<Array<{ path: string; content: string; language: string }>> {
-    if (!this.embeddingService) {
-      this.embeddingService = new EmbeddingService(workspacePath);
-    }
-
-    const allFiles = await this.scanFiles(workspacePath);
-    const topFiles = allFiles
-      .sort((a, b) => b.importance - a.importance)
-      .slice(0, 30);
-
-    const filesWithContent = await Promise.all(
-      topFiles.map(async (file) => {
-        try {
-          const content = await fs.readFile(file.path, "utf-8");
-          return {
-            path: file.path,
-            content: content.slice(0, 4000),
-            fullContent: content,
-          };
-        } catch {
-          return null;
-        }
-      }),
-    );
-
-    const validFiles = filesWithContent.filter((f) => f !== null) as Array<{
-      path: string;
-      content: string;
-      fullContent: string;
-    }>;
-
-    try {
-      const relevantFiles = await this.embeddingService.findRelevantFiles(
-        issueDescription,
-        validFiles,
-        this.maxFiles,
-      );
-
-      return relevantFiles.map((f) => {
-        const file = validFiles.find((vf) => vf.path === f.path);
-        return {
-          path: path.relative(workspacePath, f.path),
-          content: file?.fullContent.slice(0, 3000) || "",
-          language: this.getLanguageFromExtension(path.extname(f.path)),
-        };
-      });
-    } catch {
-      return this.getRelevantFiles(workspacePath);
-    }
-  }
-
   async findRelevantFiles(
     workspacePath: string,
     issueDescription: string,
   ): Promise<string[]> {
-    if (!this.embeddingService) {
-      this.embeddingService = new EmbeddingService(workspacePath);
-    }
-
     const allFiles = await this.scanFiles(workspacePath);
-    const topFiles = allFiles
-      .sort((a, b) => b.importance - a.importance)
-      .slice(0, 30);
-
-    const filesWithContent = await Promise.all(
-      topFiles.map(async (file) => {
-        try {
-          const content = await fs.readFile(file.path, "utf-8");
-          return {
-            path: file.path,
-            content: content.slice(0, 4000),
-          };
-        } catch {
-          return null;
-        }
-      }),
+    const scoredFiles = await this.scoreFileRelevance(
+      allFiles,
+      issueDescription,
     );
 
-    const validFiles = filesWithContent.filter((f) => f !== null) as Array<{
-      path: string;
-      content: string;
-    }>;
-
-    try {
-      const relevantFiles = await this.embeddingService.findRelevantFiles(
-        issueDescription,
-        validFiles,
-        this.maxFiles,
-      );
-
-      return relevantFiles.map((f) => f.path);
-    } catch {
-      console.warn("Embedding search failed, using keyword fallback");
-      const scoredFiles = await this.scoreFileRelevance(
-        allFiles,
-        issueDescription,
-      );
-
-      return scoredFiles
-        .sort((a, b) => b.score - a.score)
-        .slice(0, this.maxFiles)
-        .map((f) => f.path);
-    }
+    return scoredFiles
+      .sort((a, b) => b.score - a.score)
+      .slice(0, this.maxFiles)
+      .map((f) => f.path);
   }
 
   private async generateDirectoryStructure(rootPath: string): Promise<string> {
     const structure: string[] = [];
-    const maxDepth = 3;
 
     const generateTree = async (
       dir: string,
       prefix = "",
       isLast = true,
-      currentDepth = 0,
     ): Promise<void> => {
-      if (currentDepth > maxDepth || structure.length > 50) return;
-
       const baseName = path.basename(dir);
       const connector = isLast ? "└── " : "├── ";
       structure.push(`${prefix}${connector}${baseName}`);
@@ -195,7 +89,6 @@ export class CodeAnalysisService {
             path.join(dir, dirs[i].name),
             newPrefix,
             isLastDir,
-            currentDepth + 1,
           );
         }
       } catch (error) {
@@ -209,7 +102,6 @@ export class CodeAnalysisService {
   private async extractDependencies(workspacePath: string): Promise<string[]> {
     const dependencies: string[] = [];
 
-    // Package.json dependencies
     try {
       const packageJsonPath = path.join(workspacePath, "package.json");
       const packageJson = JSON.parse(
@@ -223,10 +115,8 @@ export class CodeAnalysisService {
         dependencies.push(...Object.keys(packageJson.devDependencies));
       }
     } catch {
-      // No package.json or can't read it
     }
 
-    // Requirements.txt dependencies
     try {
       const requirementsPath = path.join(workspacePath, "requirements.txt");
       const requirements = await fs.readFile(requirementsPath, "utf-8");
@@ -236,10 +126,8 @@ export class CodeAnalysisService {
         .filter((dep) => dep && !dep.startsWith("#"));
       dependencies.push(...pythonDeps);
     } catch {
-      // No requirements.txt
     }
 
-    // Cargo.toml dependencies
     try {
       const cargoPath = path.join(workspacePath, "Cargo.toml");
       const cargoContent = await fs.readFile(cargoPath, "utf-8");
@@ -254,10 +142,9 @@ export class CodeAnalysisService {
         dependencies.push(...rustDeps);
       }
     } catch {
-      // No Cargo.toml
     }
 
-    return [...new Set(dependencies)].slice(0, 20);
+    return [...new Set(dependencies)].slice(0, 50);
   }
 
   private async detectTestFramework(
@@ -286,7 +173,6 @@ export class CodeAnalysisService {
       }
     }
 
-    // Check for test directories
     const testDirs = ["test", "tests", "__tests__", "spec"];
     for (const dir of testDirs) {
       try {
@@ -340,10 +226,9 @@ export class CodeAnalysisService {
     for (const file of sortedFiles) {
       try {
         const content = await fs.readFile(file.path, "utf-8");
-        const truncatedContent = content.slice(0, 3000);
         result.push({
           path: path.relative(workspacePath, file.path),
-          content: truncatedContent,
+          content: content.slice(0, this.maxFileSize),
           language: this.getLanguageFromExtension(path.extname(file.path)),
         });
       } catch {
@@ -383,13 +268,11 @@ export class CodeAnalysisService {
                   });
                 }
               } catch {
-                // Skip files we can't stat
               }
             }
           }
         }
       } catch {
-        // Skip directories we can't read
       }
     };
 
@@ -406,14 +289,12 @@ export class CodeAnalysisService {
     return files.map((file) => {
       let score = file.importance;
 
-      // Boost score for files mentioned in issue
       for (const keyword of keywords) {
         if (file.path.toLowerCase().includes(keyword.toLowerCase())) {
           score += 10;
         }
       }
 
-      // Boost for certain file types based on issue content
       if (issueDescription.toLowerCase().includes("test") && file.isTest) {
         score += 5;
       }
@@ -427,7 +308,6 @@ export class CodeAnalysisService {
   }
 
   private extractKeywords(text: string): string[] {
-    // Extract potential file names, function names, and important terms
     const words = text.toLowerCase().match(/\b\w+\b/g) || [];
     return words
       .filter(
@@ -542,11 +422,9 @@ export class CodeAnalysisService {
   private calculateImportance(filePath: string, size: number): number {
     let importance = 1;
 
-    // Size factor (prefer medium-sized files)
     if (size > 1000 && size < 10000) importance += 2;
     else if (size > 500) importance += 1;
 
-    // Main files get higher importance
     const fileName = path.basename(filePath).toLowerCase();
     if (
       ["index", "main", "app", "server"].some((name) =>
@@ -556,12 +434,10 @@ export class CodeAnalysisService {
       importance += 5;
     }
 
-    // Source files more important than tests
     if (!this.isTestFile(filePath)) {
       importance += 2;
     }
 
-    // Config files are moderately important
     if (this.isConfigFile(filePath)) {
       importance += 1;
     }

@@ -41,7 +41,6 @@ export class BugFixTask extends BaseTask {
 
       const codeContext = await this.codeAnalysis.analyzeRepository(
         workspace,
-        issueDescription,
       );
 
       // Step 4: Generate the fix

@@ -51,8 +51,7 @@ Complete setup instructions for deploying Ollama Turbo Agent with domain `https:
 2. Sign up and add credits (https://openrouter.ai/settings/credits)
 3. Set `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY=your_key`
 4. Uses `x-ai/grok-code-fast-1` model (256K context, ~$0.0002/1M tokens)
-5. Still need `OPENAI_API_KEY` for embeddings
-6. Optional: Set `OPENROUTER_MODEL` to use a different model
+5. Optional: Set `OPENROUTER_MODEL` to use a different model
 
 **Free Alternative**: Set `OPENROUTER_MODEL=qwen/qwen3-coder:free` for $0 cost
 
@@ -93,9 +92,6 @@ LLM_PROVIDER=openrouter
 
 # OpenRouter Configuration - FREE Grok + 200+ models! 🚀  
 OPENROUTER_API_KEY=your_openrouter_api_key_here
-
-# OpenAI Configuration (for embeddings - required)
-OPENAI_API_KEY=sk-your-openai-api-key-here
 
 # Authentication
 NEXTAUTH_URL=https://overviewer-agent.liviogama.com
