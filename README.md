@@ -47,6 +47,7 @@ Overviewer is a GitHub App that acts like an AI-powered maintainer. When an issu
 
 ## 🚀 Key Features
 
+- 💰 **Ultra Cheap AI** - Uses Grok Code Fast 1 via OpenRouter (~$0.0002/1M tokens)
 - 🔎 Automatic issue triage  
 - 🛠️ AI-powered code fixes  
 - ✅ Self-review and testing  

@@ -44,6 +44,32 @@ Complete setup instructions for deploying Ollama Turbo Agent with domain `https:
 
 ## 🔐 **2. Environment Configuration**
 
+### LLM Provider Setup
+
+**OpenRouter - Grok Code Fast 1 (Default & Recommended)** 🚀
+1. Get API key from https://openrouter.ai/keys
+2. Sign up and add credits (https://openrouter.ai/settings/credits)
+3. Set `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY=your_key`
+4. Uses `x-ai/grok-code-fast-1` model (256K context, ~$0.0002/1M tokens)
+5. Still need `OPENAI_API_KEY` for embeddings
+6. Optional: Set `OPENROUTER_MODEL` to use a different model
+
+**Free Alternative**: Set `OPENROUTER_MODEL=qwen/qwen3-coder:free` for $0 cost
+
+**Benefits**: 
+- ✅ Access to 200+ models through one API
+- ✅ Free tier includes Grok, Llama, Mistral, and more
+- ✅ Automatic fallback to other models
+- ✅ Usage tracking and analytics
+
+**Grok (xAI Direct) - FREE Alternative**
+1. Get free API key from https://console.x.ai
+2. Set `LLM_PROVIDER=grok` and `XAI_API_KEY=your_key`
+
+**OpenAI (Paid Alternative)**
+1. Get API key from https://platform.openai.com
+2. Set `LLM_PROVIDER=openai` and `OPENAI_API_KEY=your_key`
+
 ### Create Production Environment File
 
 ```bash
@@ -62,7 +88,13 @@ DATABASE_URL=postgresql://postgres:postgres@postgres:5432/overviewer_agent
 # Redis Configuration  
 REDIS_URL=redis://redis:6379
 
-# OpenAI Configuration
+# LLM Configuration (Choose one provider)
+LLM_PROVIDER=openrouter
+
+# OpenRouter Configuration - FREE Grok + 200+ models! 🚀  
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# OpenAI Configuration (for embeddings - required)
 OPENAI_API_KEY=sk-your-openai-api-key-here
 
 # Authentication

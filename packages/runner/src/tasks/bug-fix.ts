@@ -30,26 +30,19 @@ export class BugFixTask extends BaseTask {
         "🔍 Analyzing the issue and repository structure...",
       );
 
+      const issueDescription =
+        job.taskParams.issueBody || job.taskParams.args || "";
+
       const analysis = await this.llm.analyzeIssue(
         job.taskParams.issueTitle || "Bug fix request",
-        job.taskParams.issueBody || job.taskParams.args || "",
+        issueDescription,
         await this.getRepositoryOverview(workspace),
       );
 
-      console.log(
-        `Issue analysis complete: ${analysis.taskType} (${analysis.confidence}% confidence)`,
-      );
-
-      // Step 2: Analyze repository context
-      const codeContext = await this.codeAnalysis.analyzeRepository(workspace);
-
-      // Step 3: Find relevant files
-      const relevantFiles = await this.codeAnalysis.findRelevantFiles(
+      const codeContext = await this.codeAnalysis.analyzeRepository(
         workspace,
-        job.taskParams.issueBody || job.taskParams.args || "",
+        issueDescription,
       );
-
-      console.log(`Found ${relevantFiles.length} relevant files for analysis`);
 
       // Step 4: Generate the fix
       await this.updateStatus(
@@ -68,9 +61,41 @@ export class BugFixTask extends BaseTask {
         analysis,
       );
 
+      if (!changes.files || changes.files.length === 0) {
+        const explanation = changes.reasoning || changes.summary || "No code changes needed";
+        
+        await this.updateStatus(
+          job,
+          octokit,
+          "completed",
+          `ℹ️ Analysis complete: ${explanation.slice(0, 200)}`,
+        );
+        
+        const comment = `## 🤖 Analysis Result
+
+**Summary:** ${changes.summary || "No code changes required"}
+
+**Reasoning:** ${changes.reasoning || "The AI determined that no code modifications are needed for this issue."}
+
+This issue may require:
+- Manual file system operations (moving/renaming files)
+- Configuration changes outside of code files
+- Changes to build/deployment processes
+- No action at all
+
+If you believe code changes are needed, please provide more specific details about what should be modified.`;
+
+        await this.postComment(job, comment);
+        
+        return {
+          success: true,
+          changes: { files: [], additions: 0, deletions: 0 },
+          summary: `No code changes needed: ${explanation.slice(0, 100)}`,
+        };
+      }
+
       console.log(`Generated fix affecting ${changes.files.length} files`);
 
-      // Step 5: Apply the changes
       await this.updateStatus(
         job,
         octokit,
@@ -171,10 +196,20 @@ export class BugFixTask extends BaseTask {
         branchName,
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Bug fix task failed:", errorMessage);
+      
+      await this.updateStatus(
+        job,
+        octokit,
+        "failed",
+        `❌ Task failed: ${errorMessage}`,
+      ).catch(err => console.error("Failed to update status:", err));
+      
       return {
         success: false,
         changes: { files: [], additions: 0, deletions: 0 },
-        summary: `Bug fix failed: ${error instanceof Error ? error.message : String(error)}`,
+        summary: `Bug fix failed: ${errorMessage}`,
       };
     }
   }

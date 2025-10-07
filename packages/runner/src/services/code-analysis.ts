@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { EmbeddingService } from "./embedding.js";
 import { CodeContext } from "./llm.js";
 
 export interface FileInfo {
@@ -12,8 +13,9 @@ export interface FileInfo {
 }
 
 export class CodeAnalysisService {
-  private readonly maxFileSize = 50000; // 50KB max per file
-  private readonly maxFiles = 20; // Max files to analyze
+  private readonly maxFileSize = 15000;
+  private readonly maxFiles = 8;
+  private embeddingService?: EmbeddingService;
   private readonly supportedExtensions = new Set([
     ".js",
     ".ts",
@@ -32,12 +34,20 @@ export class CodeAnalysisService {
     ".swift",
   ]);
 
-  async analyzeRepository(workspacePath: string): Promise<CodeContext> {
+  async analyzeRepository(
+    workspacePath: string,
+    issueDescription?: string,
+  ): Promise<CodeContext> {
     const structure = await this.generateDirectoryStructure(workspacePath);
     const dependencies = await this.extractDependencies(workspacePath);
     const testFramework = await this.detectTestFramework(workspacePath);
     const buildTool = await this.detectBuildTool(workspacePath);
-    const files = await this.getRelevantFiles(workspacePath);
+    const files = issueDescription
+      ? await this.getRelevantFilesWithEmbedding(
+          workspacePath,
+          issueDescription,
+        )
+      : await this.getRelevantFiles(workspacePath);
 
     return {
       structure,
@@ -48,30 +58,126 @@ export class CodeAnalysisService {
     };
   }
 
+  private async getRelevantFilesWithEmbedding(
+    workspacePath: string,
+    issueDescription: string,
+  ): Promise<Array<{ path: string; content: string; language: string }>> {
+    if (!this.embeddingService) {
+      this.embeddingService = new EmbeddingService(workspacePath);
+    }
+
+    const allFiles = await this.scanFiles(workspacePath);
+    const topFiles = allFiles
+      .sort((a, b) => b.importance - a.importance)
+      .slice(0, 30);
+
+    const filesWithContent = await Promise.all(
+      topFiles.map(async (file) => {
+        try {
+          const content = await fs.readFile(file.path, "utf-8");
+          return {
+            path: file.path,
+            content: content.slice(0, 4000),
+            fullContent: content,
+          };
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    const validFiles = filesWithContent.filter((f) => f !== null) as Array<{
+      path: string;
+      content: string;
+      fullContent: string;
+    }>;
+
+    try {
+      const relevantFiles = await this.embeddingService.findRelevantFiles(
+        issueDescription,
+        validFiles,
+        this.maxFiles,
+      );
+
+      return relevantFiles.map((f) => {
+        const file = validFiles.find((vf) => vf.path === f.path);
+        return {
+          path: path.relative(workspacePath, f.path),
+          content: file?.fullContent.slice(0, 3000) || "",
+          language: this.getLanguageFromExtension(path.extname(f.path)),
+        };
+      });
+    } catch {
+      return this.getRelevantFiles(workspacePath);
+    }
+  }
+
   async findRelevantFiles(
     workspacePath: string,
     issueDescription: string,
   ): Promise<string[]> {
+    if (!this.embeddingService) {
+      this.embeddingService = new EmbeddingService(workspacePath);
+    }
+
     const allFiles = await this.scanFiles(workspacePath);
-    const scoredFiles = await this.scoreFileRelevance(
-      allFiles,
-      issueDescription,
+    const topFiles = allFiles
+      .sort((a, b) => b.importance - a.importance)
+      .slice(0, 30);
+
+    const filesWithContent = await Promise.all(
+      topFiles.map(async (file) => {
+        try {
+          const content = await fs.readFile(file.path, "utf-8");
+          return {
+            path: file.path,
+            content: content.slice(0, 4000),
+          };
+        } catch {
+          return null;
+        }
+      }),
     );
 
-    return scoredFiles
-      .sort((a, b) => b.score - a.score)
-      .slice(0, this.maxFiles)
-      .map((f) => f.path);
+    const validFiles = filesWithContent.filter((f) => f !== null) as Array<{
+      path: string;
+      content: string;
+    }>;
+
+    try {
+      const relevantFiles = await this.embeddingService.findRelevantFiles(
+        issueDescription,
+        validFiles,
+        this.maxFiles,
+      );
+
+      return relevantFiles.map((f) => f.path);
+    } catch {
+      console.warn("Embedding search failed, using keyword fallback");
+      const scoredFiles = await this.scoreFileRelevance(
+        allFiles,
+        issueDescription,
+      );
+
+      return scoredFiles
+        .sort((a, b) => b.score - a.score)
+        .slice(0, this.maxFiles)
+        .map((f) => f.path);
+    }
   }
 
   private async generateDirectoryStructure(rootPath: string): Promise<string> {
     const structure: string[] = [];
+    const maxDepth = 3;
 
     const generateTree = async (
       dir: string,
       prefix = "",
       isLast = true,
+      currentDepth = 0,
     ): Promise<void> => {
+      if (currentDepth > maxDepth || structure.length > 50) return;
+
       const baseName = path.basename(dir);
       const connector = isLast ? "└── " : "├── ";
       structure.push(`${prefix}${connector}${baseName}`);
@@ -89,10 +195,10 @@ export class CodeAnalysisService {
             path.join(dir, dirs[i].name),
             newPrefix,
             isLastDir,
+            currentDepth + 1,
           );
         }
       } catch (error) {
-        // Skip directories we can't read
       }
     };
 
@@ -151,7 +257,7 @@ export class CodeAnalysisService {
       // No Cargo.toml
     }
 
-    return [...new Set(dependencies)].slice(0, 50); // Limit and dedupe
+    return [...new Set(dependencies)].slice(0, 20);
   }
 
   private async detectTestFramework(
@@ -234,13 +340,13 @@ export class CodeAnalysisService {
     for (const file of sortedFiles) {
       try {
         const content = await fs.readFile(file.path, "utf-8");
+        const truncatedContent = content.slice(0, 3000);
         result.push({
           path: path.relative(workspacePath, file.path),
-          content: content.slice(0, this.maxFileSize),
+          content: truncatedContent,
           language: this.getLanguageFromExtension(path.extname(file.path)),
         });
       } catch {
-        // Skip files we can't read
       }
     }
 

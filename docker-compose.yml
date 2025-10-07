@@ -79,6 +79,10 @@ services:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-x-ai/grok-code-fast-1}
+      - XAI_API_KEY=${XAI_API_KEY}
       - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
       - WORKSPACE_ROOT=/tmp/overviewer-workspaces
