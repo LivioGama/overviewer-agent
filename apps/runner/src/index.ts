@@ -32,13 +32,4 @@ const shutdown = async (signal: string) => {
   try {
     await runner.stop();
     process.exit(0);
-  } catch (error) {
-    console.error("Error during shutdown:", error);
-    process.exit(1);
-  }
-};
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
-
-start();
+  } catch (erro
