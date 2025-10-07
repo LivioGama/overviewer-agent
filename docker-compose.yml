@@ -77,8 +77,8 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - OLLAMA_API_URL=https://ollama.com
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
       - WORKSPACE_ROOT=/tmp/overviewer-workspaces
     volumes:
