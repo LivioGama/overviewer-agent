@@ -43,10 +43,10 @@ export abstract class BaseTask {
   }
 
   protected async commitAndPush(
-    job: Job,
+    _job: Job,
     branchName: string,
     message: string,
-    octokit: Octokit,
+    _octokit: Octokit,
   ): Promise<void> {
     const git = simpleGit(this.workspace);
 
@@ -210,7 +210,7 @@ export abstract class BaseTask {
       output: {
         title: name,
         summary,
-        text: details,
+        ...(details && { text: details }),
       },
     });
 
@@ -231,9 +231,9 @@ export abstract class BaseTask {
   }
 
   protected async updateIssueProgress(
-    job: Job,
-    status: string,
-    details?: string,
+    _job: Job,
+    _status: string,
+    _details?: string,
   ): Promise<void> {}
 
   protected async postInitialComment(job: Job): Promise<void> {

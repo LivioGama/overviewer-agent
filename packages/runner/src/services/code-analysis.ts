@@ -39,13 +39,16 @@ export class CodeAnalysisService {
     const buildTool = await this.detectBuildTool(workspacePath);
     const files = await this.getRelevantFiles(workspacePath);
 
-    return {
+    const context: CodeContext = {
       structure,
       dependencies,
-      testFramework,
-      buildTool,
       files,
     };
+
+    if (testFramework) context.testFramework = testFramework;
+    if (buildTool) context.buildTool = buildTool;
+
+    return context;
   }
 
   async findRelevantFiles(
@@ -85,11 +88,14 @@ export class CodeAnalysisService {
         for (let i = 0; i < dirs.length; i++) {
           const isLastDir = i === dirs.length - 1;
           const newPrefix = prefix + (isLast ? "    " : "│   ");
-          await generateTree(
-            path.join(dir, dirs[i].name),
-            newPrefix,
-            isLastDir,
-          );
+          const currentDir = dirs[i];
+          if (currentDir) {
+            await generateTree(
+              path.join(dir, currentDir.name),
+              newPrefix,
+              isLastDir,
+            );
+          }
         }
       } catch (error) {
         // Skip directories we can't read
@@ -126,7 +132,10 @@ export class CodeAnalysisService {
       const requirements = await fs.readFile(requirementsPath, "utf-8");
       const pythonDeps = requirements
         .split("\n")
-        .map((line) => line.split("==")[0].split(">=")[0].split("<=")[0].trim())
+        .map((line) => {
+          const parts = line.split("==")[0]?.split(">=")[0]?.split("<=")[0];
+          return parts?.trim() ?? "";
+        })
         .filter((dep) => dep && !dep.startsWith("#"));
       dependencies.push(...pythonDeps);
     } catch {
@@ -140,10 +149,11 @@ export class CodeAnalysisService {
       const dependencySection = cargoContent.match(
         /\[dependencies\]([\s\S]*?)(\[|$)/,
       );
-      if (dependencySection) {
-        const rustDeps = dependencySection[1]
+      const sectionContent = dependencySection?.[1];
+      if (sectionContent) {
+        const rustDeps = sectionContent
           .split("\n")
-          .map((line) => line.split("=")[0].trim())
+          .map((line) => line.split("=")[0]?.trim() ?? "")
           .filter((dep) => dep && !dep.startsWith("#"));
         dependencies.push(...rustDeps);
       }

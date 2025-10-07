@@ -77,7 +77,7 @@ export class PRReviewerService {
       status: string;
     }>,
     originalIssue?: { title: string; body: string },
-    job?: Job,
+    _job?: Job,
   ): Promise<ReviewResult> {
     const changes = files.map((file) => ({
       filename: file.filename,
@@ -218,7 +218,7 @@ Respond in JSON format:
 
   private basicAnalysis(
     changes: Array<{ additions: number; deletions: number; filename: string }>,
-    originalIssue?: { title: string; body: string },
+    _originalIssue?: { title: string; body: string },
   ): ReviewResult {
     // Basic heuristic analysis
     const totalChanges = changes.reduce(

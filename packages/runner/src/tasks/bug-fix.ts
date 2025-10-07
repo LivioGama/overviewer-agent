@@ -238,7 +238,7 @@ export class BugFixTask extends BaseTask {
     await git.reset(["--hard", "HEAD"]);
   }
 
-  protected async createWorkingBranch(
+  protected override async createWorkingBranch(
     job: Job,
     prefix: string,
   ): Promise<string> {

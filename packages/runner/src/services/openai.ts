@@ -37,42 +37,6 @@ export class OpenAIService {
   private client: AxiosInstance;
   private model: string;
 
-  private static readonly CODE_OUTPUT_SCHEMA = {
-    type: "object",
-    properties: {
-      code: {
-        type: "string",
-        description:
-          "The generated or modified code without any markdown formatting, explanations, or comments",
-      },
-    },
-    required: ["code"],
-    additionalProperties: false,
-  };
-
-  private static readonly SECURITY_ANALYSIS_SCHEMA = {
-    type: "object",
-    properties: {
-      vulnerabilities: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            type: { type: "string" },
-            severity: { type: "string", enum: ["High", "Medium", "Low"] },
-            description: { type: "string" },
-            location: { type: "string" },
-            recommendation: { type: "string" },
-            fixedCode: { type: "string" },
-          },
-          required: ["type", "severity", "description", "recommendation"],
-        },
-      },
-    },
-    required: ["vulnerabilities"],
-    additionalProperties: false,
-  };
-
   constructor(apiKey?: string, model = "gpt-4o") {
     const key = apiKey || process.env.OPENAI_API_KEY;
 

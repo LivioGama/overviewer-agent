@@ -37,7 +37,8 @@
   "exclude": [
     "node_modules",
     "dist",
-    ".next"
+    ".next",
+    "packages/web"
   ]
 }
 

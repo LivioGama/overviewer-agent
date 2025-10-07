@@ -89,8 +89,9 @@ export class RunnerService {
       );
       if (!streams || streams.length === 0) return null;
       const stream = streams[0];
-      if (!stream.messages || stream.messages.length === 0) return null;
+      if (!stream?.messages || stream.messages.length === 0) return null;
       const message = stream.messages[0];
+      if (!message?.message) return null;
       const jobData = message.message as any;
       const job: Job = JSON.parse(jobData.jobData);
       return { job, streamId: message.id };

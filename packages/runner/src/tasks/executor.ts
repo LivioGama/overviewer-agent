@@ -52,5 +52,6 @@ export class TaskExecutor {
   }
 }
 
-// Re-export for backward compatibility
-export { BaseTask, TaskResult } from "./base-task.js";
+export { BaseTask } from "./base-task.js";
+export type { TaskResult } from "./base-task.js";
+

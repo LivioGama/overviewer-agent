@@ -240,7 +240,7 @@ ${f.content.slice(0, 2000)}${f.content.length > 2000 ? "..." : ""}
       const jsonMatch =
         response.match(/```json\n([\s\S]*?)\n```/) ||
         response.match(/```\n([\s\S]*?)\n```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : response;
+      const jsonStr = jsonMatch?.[1] ?? response;
 
       return JSON.parse(jsonStr.trim());
     } catch (error) {
