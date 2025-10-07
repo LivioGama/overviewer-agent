@@ -131,6 +131,7 @@ export class BugFixTask extends BaseTask {
       const commitMessage = await this.llm.generateCommitMessage(changes);
 
       await this.commitChanges(workspace, commitMessage);
+      await this.pushBranch(workspace, branchName);
 
       // Step 9: Create PR
       await this.updateStatus(
@@ -255,6 +256,14 @@ export class BugFixTask extends BaseTask {
     const git = simpleGit(workspace);
     await git.add(".");
     await git.commit(message);
+  }
+
+  protected async pushBranch(
+    workspace: string,
+    branchName: string,
+  ): Promise<void> {
+    const git = simpleGit(workspace);
+    await git.push("origin", branchName, ["--set-upstream"]);
   }
 
   protected async getRepositoryOverview(workspace: string): Promise<string> {
