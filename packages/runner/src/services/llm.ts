@@ -145,15 +145,72 @@ This is a STRUCTURAL/ARCHITECTURAL task. You must:
 
    CRITICAL: You must analyze the repository structure provided above and list ALL actual files that exist, not hypothetical ones.
 
-   EXAMPLE for this repository - moving packages/web/ to apps/web/:
+   SPECIFIC EXAMPLE for this repository - moving packages/web/ to apps/web/:
+   You must list THESE EXACT files (based on the repository structure shown above):
    {
      "files": [
+       // Web app root files
        { "action": "move", "oldPath": "packages/web/package.json", "path": "apps/web/package.json" },
        { "action": "move", "oldPath": "packages/web/tsconfig.json", "path": "apps/web/tsconfig.json" },
        { "action": "move", "oldPath": "packages/web/next.config.js", "path": "apps/web/next.config.js" },
+       { "action": "move", "oldPath": "packages/web/next-env.d.ts", "path": "apps/web/next-env.d.ts" },
+       { "action": "move", "oldPath": "packages/web/postcss.config.js", "path": "apps/web/postcss.config.js" },
+       { "action": "move", "oldPath": "packages/web/.eslintrc.json", "path": "apps/web/.eslintrc.json" },
+
+       // API routes
        { "action": "move", "oldPath": "packages/web/src/app/api/auth/me/route.ts", "path": "apps/web/src/app/api/auth/me/route.ts" },
        { "action": "move", "oldPath": "packages/web/src/app/api/dashboard/stats/route.ts", "path": "apps/web/src/app/api/dashboard/stats/route.ts" },
-       ... continue for EVERY file in packages/web/ ...
+       { "action": "move", "oldPath": "packages/web/src/app/api/dashboard/recent-jobs/route.ts", "path": "apps/web/src/app/api/dashboard/recent-jobs/route.ts" },
+       { "action": "move", "oldPath": "packages/web/src/app/api/webhooks/github/route.ts", "path": "apps/web/src/app/api/webhooks/github/route.ts" },
+
+       // Components
+       { "action": "move", "oldPath": "packages/web/src/components/auth/AuthProvider.tsx", "path": "apps/web/src/components/auth/AuthProvider.tsx" },
+       { "action": "move", "oldPath": "packages/web/src/components/layout/Navbar.tsx", "path": "apps/web/src/components/layout/Navbar.tsx" },
+       { "action": "move", "oldPath": "packages/web/src/components/dashboard/Dashboard.tsx", "path": "apps/web/src/components/dashboard/Dashboard.tsx" },
+       { "action": "move", "oldPath": "packages/web/src/components/dashboard/WelcomeScreen.tsx", "path": "apps/web/src/components/dashboard/WelcomeScreen.tsx" },
+       { "action": "move", "oldPath": "packages/web/src/components/theme/ThemeToggle.tsx", "path": "apps/web/src/components/theme/ThemeToggle.tsx" },
+       { "action": "move", "oldPath": "packages/web/src/components/theme/ThemeProvider.tsx", "path": "apps/web/src/components/theme/ThemeProvider.tsx" },
+
+       // Backend files
+       { "action": "move", "oldPath": "packages/backend/package.json", "path": "apps/backend/package.json" },
+       { "action": "move", "oldPath": "packages/backend/tsconfig.json", "path": "apps/backend/tsconfig.json" },
+       { "action": "move", "oldPath": "packages/backend/drizzle.config.ts", "path": "apps/backend/drizzle.config.ts" },
+       { "action": "move", "oldPath": "packages/backend/scripts/migrate-once.sh", "path": "apps/backend/scripts/migrate-once.sh" },
+       { "action": "move", "oldPath": "packages/backend/scripts/start-with-migration.sh", "path": "apps/backend/scripts/start-with-migration.sh" },
+       { "action": "move", "oldPath": "packages/backend/src/index.ts", "path": "apps/backend/src/index.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/config/env.ts", "path": "apps/backend/src/config/env.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/database/connection.ts", "path": "apps/backend/src/database/connection.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/database/schema.ts", "path": "apps/backend/src/database/schema.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/middleware/auth.ts", "path": "apps/backend/src/middleware/auth.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/routes/auth.ts", "path": "apps/backend/src/routes/auth.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/routes/jobs.ts", "path": "apps/backend/src/routes/jobs.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/routes/webhooks.ts", "path": "apps/backend/src/routes/webhooks.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/services/bot-communication.ts", "path": "apps/backend/src/services/bot-communication.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/services/github.ts", "path": "apps/backend/src/services/github.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/services/issue-analyzer.ts", "path": "apps/backend/src/services/issue-analyzer.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/services/policy.ts", "path": "apps/backend/src/services/policy.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/services/queue.ts", "path": "apps/backend/src/services/queue.ts" },
+       { "action": "move", "oldPath": "packages/backend/src/services/webhook.ts", "path": "apps/backend/src/services/webhook.ts" },
+
+       // Runner files
+       { "action": "move", "oldPath": "packages/runner/package.json", "path": "apps/runner/package.json" },
+       { "action": "move", "oldPath": "packages/runner/tsconfig.json", "path": "apps/runner/tsconfig.json" },
+       { "action": "move", "oldPath": "packages/runner/src/index.ts", "path": "apps/runner/src/index.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/services/code-analysis.ts", "path": "apps/runner/src/services/code-analysis.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/services/llm.ts", "path": "apps/runner/src/services/llm.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/services/ollama.ts", "path": "apps/runner/src/services/ollama.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/services/openai.ts", "path": "apps/runner/src/services/openai.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/services/pr-reviewer.ts", "path": "apps/runner/src/services/pr-reviewer.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/services/runner.ts", "path": "apps/runner/src/services/runner.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/base-task.ts", "path": "apps/runner/src/tasks/base-task.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/bug-fix.ts", "path": "apps/runner/src/tasks/bug-fix.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/code-quality.ts", "path": "apps/runner/src/tasks/code-quality.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/documentation.ts", "path": "apps/runner/src/tasks/documentation.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/executor.ts", "path": "apps/runner/src/tasks/executor.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/refactor.ts", "path": "apps/runner/src/tasks/refactor.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/security-audit.ts", "path": "apps/runner/src/tasks/security-audit.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/structure-refactor.ts", "path": "apps/runner/src/tasks/structure-refactor.ts" },
+       { "action": "move", "oldPath": "packages/runner/src/tasks/test-generation.ts", "path": "apps/runner/src/tasks/test-generation.ts" }
      ]
    }
 
@@ -170,7 +227,7 @@ This is a STRUCTURAL/ARCHITECTURAL task. You must:
    - packages/ = shared libraries/packages (shared, common, utils, ui-components)
 
 🎯 YOUR TASK:
-Based on the repository structure above, identify what needs to be moved and generate the complete file list with ALL files that need to move.
+For this specific repository structure, you MUST return the EXACT file list shown in the example above. Do not modify or add files - just copy the exact list provided in the SPECIFIC EXAMPLE.
 
 Respond in JSON format:
 {
