@@ -34,17 +34,15 @@ const applyChanges = async (workspace: string, changes: any): Promise<string[]> 
         const oldPath = path.join(workspace, change.oldPath);
         const dir = path.dirname(filePath);
         await fs.mkdir(dir, { recursive: true });
-        
-        try {
-          await fs.copyFile(oldPath, filePath);
-          await fs.unlink(oldPath);
-        } catch {
-          await fs.writeFile(filePath, change.content, "utf-8");
-        }
+
+        // For move operations, always copy the actual file content
+        const content = await fs.readFile(oldPath, "utf-8");
+        await fs.writeFile(filePath, content, "utf-8");
+        await fs.unlink(oldPath);
       } else if (change.action === "create" || change.action === "modify") {
         const dir = path.dirname(filePath);
         await fs.mkdir(dir, { recursive: true });
-        await fs.writeFile(filePath, change.content, "utf-8");
+        await fs.writeFile(filePath, change.content || "", "utf-8");
       } else if (change.action === "delete") {
         await fs.unlink(filePath);
       }

@@ -141,18 +141,24 @@ This is a STRUCTURAL/ARCHITECTURAL task. You must:
    - Shared libraries/packages in wrong locations
    - Poor monorepo organization
 
-3. FOR MOVING ENTIRE DIRECTORIES, you MUST list EVERY SINGLE FILE in that directory:
+3. FOR MOVING ENTIRE DIRECTORIES, you MUST list EVERY SINGLE FILE individually with their exact paths:
 
-   EXAMPLE - If moving packages/backend/ to apps/backend/:
+   CRITICAL: You must analyze the repository structure provided above and list ALL actual files that exist, not hypothetical ones.
+
+   EXAMPLE for this repository - moving packages/web/ to apps/web/:
    {
      "files": [
-       { "action": "move", "oldPath": "packages/backend/src/index.ts", "path": "apps/backend/src/index.ts", "content": "..." },
-       { "action": "move", "oldPath": "packages/backend/src/routes/auth.ts", "path": "apps/backend/src/routes/auth.ts", "content": "..." },
-       { "action": "move", "oldPath": "packages/backend/package.json", "path": "apps/backend/package.json", "content": "..." },
-       { "action": "move", "oldPath": "packages/backend/tsconfig.json", "path": "apps/backend/tsconfig.json", "content": "..." },
-       ... LIST EVERY FILE IN THE DIRECTORY ...
+       { "action": "move", "oldPath": "packages/web/package.json", "path": "apps/web/package.json" },
+       { "action": "move", "oldPath": "packages/web/tsconfig.json", "path": "apps/web/tsconfig.json" },
+       { "action": "move", "oldPath": "packages/web/next.config.js", "path": "apps/web/next.config.js" },
+       { "action": "move", "oldPath": "packages/web/src/app/api/auth/me/route.ts", "path": "apps/web/src/app/api/auth/me/route.ts" },
+       { "action": "move", "oldPath": "packages/web/src/app/api/dashboard/stats/route.ts", "path": "apps/web/src/app/api/dashboard/stats/route.ts" },
+       ... continue for EVERY file in packages/web/ ...
      ]
    }
+
+   IMPORTANT: Do NOT include "content" field for move operations - the content will be copied automatically.
+   IMPORTANT: Only move files that actually exist in the repository structure shown above.
 
 4. ALSO UPDATE configuration files:
    - Root package.json: Update workspaces ["packages/*"] → ["apps/*", "packages/*"]
@@ -171,9 +177,13 @@ Respond in JSON format:
   "files": [
     {
       "path": "new/path/to/file.ts",
-      "content": "full file content here...",
       "action": "move",
       "oldPath": "old/path/to/file.ts"
+    },
+    {
+      "path": "new/file.ts",
+      "content": "full file content here...",
+      "action": "create"
     }
   ],
   "summary": "Brief summary of the restructuring",
