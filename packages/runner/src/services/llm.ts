@@ -299,7 +299,13 @@ Provide a fix in JSON format with the changed files.`;
       if (!jsonMatch) {
         throw new Error("No JSON found in response");
       }
-      return JSON.parse(jsonMatch[0]);
+
+      // Remove JavaScript comments from the JSON
+      let jsonString = jsonMatch[0];
+      jsonString = jsonString.replace(/\/\/.*$/gm, ''); // Remove single-line comments
+      jsonString = jsonString.replace(/\/\*[\s\S]*?\*\//g, ''); // Remove multi-line comments
+
+      return JSON.parse(jsonString);
     } catch (error) {
       console.error("Failed to parse LLM response:", response);
       throw new Error(`Invalid JSON response from LLM: ${error}`);
