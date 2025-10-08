@@ -1,0 +1,8 @@
+{
+  "taskType": "bug_fix",
+  "issueTitle": "wrong archi",
+  "issueBody": "The application crashes when attempting to access user.role in the requireAuth middleware without first checking if the user object exists. This happens when the user is not authenticated.\n\nSteps to reproduce:\n1. Call an endpoint that requires authentication without being logged in\n2. The app crashes with 'Cannot read property role of undefined'\n\nExpected: Should return 401 Unauthorized\nActual: Crashes with null pointer exception",
+  "targetRepo": ".",
+  "targetBranch": "main"
+}
+

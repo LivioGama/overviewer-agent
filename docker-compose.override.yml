@@ -1,12 +1,19 @@
-services:
-  web:
-    networks:
-      easypanel:
-        aliases:
-          - liviogama_overviewer-agent_web
-      default: null
-
-networks:
-  easypanel:
-    external: true
-
+{
+  "services": {
+    "runner": {
+      "networks": {
+        "easypanel": {
+          "aliases": [
+            "liviogama_overviewer-agent_runner"
+          ]
+        },
+        "default": null
+      }
+    }
+  },
+  "networks": {
+    "easypanel": {
+      "external": true
+    }
+  }
+}

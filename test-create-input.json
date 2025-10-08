@@ -1,0 +1,8 @@
+{
+  "taskType": "autonomous",
+  "issueTitle": "Refactor project structure to proper monorepo layout",
+  "issueBody": "The project almost looks like a monorepo but has an inconsistent structure. Applications (backend, web, runner) should be in an `apps/` directory, while shared libraries should remain in `packages/`. \n\nPlease:\n1. Create an `apps/` directory\n2. Move packages/web → apps/web\n3. Move packages/backend → apps/backend  \n4. Move packages/runner → apps/runner\n5. Update any configuration files (workspace paths, imports, etc.)\n\nThis will follow standard monorepo conventions where apps/ contains deployable applications and packages/ contains shared libraries.",
+  "targetRepo": ".",
+  "targetBranch": "main"
+}
+
