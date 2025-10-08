@@ -1,0 +1,8 @@
+{
+  "taskType": "feature",
+  "issueTitle": "Add logging middleware",
+  "issueBody": "Add a logging middleware to the backend that logs all incoming HTTP requests with timestamp, method, path, and response time. Should be configurable via environment variable ENABLE_REQUEST_LOGGING.",
+  "targetRepo": ".",
+  "targetBranch": "main"
+}
+

@@ -13,7 +13,8 @@
     "lint": "bun run --filter=* lint",
     "type-check": "bun run --filter=* type-check",
     "db:migrate": "bun run --filter=backend db:migrate",
-    "db:seed": "bun run --filter=backend db:seed"
+    "db:seed": "bun run --filter=backend db:seed",
+    "test:create-pr": "bun run test-create-pr.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -50,27 +50,19 @@ export class StructureRefactorTask extends BaseTask {
         }
       }
 
-      branchName = await this.createWorkingBranch(
-        job,
-        "refactor/structure",
-      );
+      branchName = await this.createWorkingBranch(job, "refactor/structure");
 
-      console.log(
-        `Moving ${moveOperation.from} → ${moveOperation.to}`,
-      );
+      console.log(`Moving ${moveOperation.from} → ${moveOperation.to}`);
 
       const sourceStats = await fs.stat(sourcePath);
-      
+
       if (sourceStats.isDirectory()) {
         const subdirs = await fs.readdir(sourcePath, {
           withFileTypes: true,
         });
         const subdirectories = subdirs.filter((d) => d.isDirectory());
 
-        if (
-          subdirectories.length > 0 &&
-          subdirectories.length <= 10
-        ) {
+        if (subdirectories.length > 0 && subdirectories.length <= 10) {
           console.log(
             `Detected ${subdirectories.length} subdirectories, moving each individually...`,
           );
@@ -81,10 +73,7 @@ export class StructureRefactorTask extends BaseTask {
               continue;
             }
 
-            const sourceSubPath = path.join(
-              moveOperation.from,
-              subdir.name,
-            );
+            const sourceSubPath = path.join(moveOperation.from, subdir.name);
             const destSubPath = path.join(moveOperation.to, subdir.name);
 
             console.log(`Moving ${sourceSubPath} → ${destSubPath}`);
@@ -95,9 +84,7 @@ export class StructureRefactorTask extends BaseTask {
             );
 
             if (files.length === 0) {
-              console.warn(
-                `No files found in ${sourceSubPath}, skipping`,
-              );
+              console.warn(`No files found in ${sourceSubPath}, skipping`);
               continue;
             }
 
@@ -152,7 +139,7 @@ export class StructureRefactorTask extends BaseTask {
       );
 
       const totalFiles = changedFiles.length;
-      const commitMessage = `Refactor: Move ${moveOperation.from} to ${moveOperation.to}\n\nMoved ${totalFiles} files and updated all imports`;
+      const commitMessage = `Refactor: Move ${moveOperation.from} to ${moveOperation.to}\n\nRestructured monorepo by moving ${totalFiles} files from ${moveOperation.from} to ${moveOperation.to}\n- Updated workspace configuration\n- Updated import paths across codebase\n- Updated configuration files (tsconfig, docker-compose, etc.)`;
 
       await this.commitAndPush(job, branchName, commitMessage, octokit);
 
@@ -160,7 +147,7 @@ export class StructureRefactorTask extends BaseTask {
         job,
         branchName,
         `Refactor: Move ${moveOperation.from} to ${moveOperation.to}`,
-        `This PR moves the \`${moveOperation.from}\` directory to \`${moveOperation.to}\` and updates all imports accordingly.\n\n**Changes:**\n- Moved ${totalFiles} files\n- Updated import paths across the codebase\n- Updated configuration files (tsconfig, package.json)`,
+        `This PR moves the \`${moveOperation.from}\` directory to \`${moveOperation.to}\` and updates all imports accordingly.\n\n**Changes:**\n- Moved ${totalFiles} files\n- Updated import paths across the codebase\n- Updated configuration files`,
       );
 
       return {
@@ -176,7 +163,7 @@ export class StructureRefactorTask extends BaseTask {
       };
     } catch (error) {
       console.error("Structure refactor failed:", error);
-      
+
       if (branchName) {
         try {
           const git = simpleGit(workspace);
@@ -203,7 +190,7 @@ export class StructureRefactorTask extends BaseTask {
   } | null {
     const multiMovePattern = /put\s+([^\s]+)\/([^\s]+)\s+to\s+([^\s]+)\/\2/gi;
     const matches = Array.from(issueBody.matchAll(multiMovePattern));
-    
+
     if (matches.length > 1) {
       const firstMatch = matches[0];
       if (firstMatch) {
@@ -271,6 +258,7 @@ export class StructureRefactorTask extends BaseTask {
   ): Promise<void> {
     const sourcePath = path.join(workspace, sourceDir);
 
+    // First, copy all files to new location
     for (const file of files) {
       const relativePath = path.relative(sourcePath, file);
       const newPath = path.join(destDir, relativePath);
@@ -280,28 +268,34 @@ export class StructureRefactorTask extends BaseTask {
         await fs.mkdir(path.dirname(newFullPath), {
           recursive: true,
         });
-      } catch (mkdirError: any) {
-        if (mkdirError.code !== "EEXIST") {
-          throw mkdirError;
-        }
-      }
 
-      try {
-        await git.mv(path.join(sourceDir, relativePath), newPath);
+        // Read the file content (handle both text and binary files)
+        const content = await fs.readFile(file);
+
+        // Write to new location
+        await fs.writeFile(newFullPath, content);
+
         changedFiles.push(newPath);
-      } catch (mvError) {
-        console.error(`Failed to move ${relativePath}:`, mvError);
+      } catch (error) {
+        console.error(`Failed to copy ${relativePath}:`, error);
         throw new Error(
-          `Failed to move file: ${relativePath}. Git error: ${mvError}`,
+          `Failed to copy file: ${relativePath}. Error: ${error}`,
         );
       }
+    }
+
+    // Then remove the old directory structure
+    try {
+      await fs.rm(sourcePath, { recursive: true, force: true });
+      console.log(`Removed old directory: ${sourceDir}`);
+    } catch (rmError) {
+      console.error(`Failed to remove old directory ${sourceDir}:`, rmError);
+      // Don't throw here - the files are already copied, we can warn but continue
     }
   }
 
   private shouldIgnoreDir(name: string): boolean {
-    return ["node_modules", ".git", "dist", "build", ".next"].includes(
-      name,
-    );
+    return ["node_modules", ".git", "dist", "build", ".next"].includes(name);
   }
 
   private async updateImportPaths(
@@ -439,8 +433,8 @@ export class StructureRefactorTask extends BaseTask {
             w.replace(oldPath, newPath),
           );
         } else if (pkg.workspaces.packages) {
-          pkg.workspaces.packages = pkg.workspaces.packages.map(
-            (w: string) => w.replace(oldPath, newPath),
+          pkg.workspaces.packages = pkg.workspaces.packages.map((w: string) =>
+            w.replace(oldPath, newPath),
           );
         }
       }
@@ -489,4 +483,3 @@ export class StructureRefactorTask extends BaseTask {
     }
   }
 }
-

@@ -1,0 +1,8 @@
+{
+  "taskType": "bug_fix",
+  "issueTitle": "wrong archi",
+  "issueBody": "The project almost looks like a monorepo. Didn't you mean to:\n\nPut packages/web to apps/web\nPut packages/backend to apps/backend\nPut packages/runner to apps/runner\n?",
+  "targetRepo": ".",
+  "targetBranch": "main"
+}
+

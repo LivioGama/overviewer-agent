@@ -7,7 +7,8 @@ export interface IssueAnalysis {
     | "documentation"
     | "security_audit"
     | "test_generation"
-    | "refactor";
+    | "refactor"
+    | "structure_refactor";
   confidence: number;
   description: string;
   priority: "low" | "medium" | "high" | "critical";
@@ -32,7 +33,8 @@ export interface CodeChanges {
   files: Array<{
     path: string;
     content: string;
-    action: "create" | "modify" | "delete";
+    action: "create" | "modify" | "delete" | "move";
+    oldPath?: string;
   }>;
   summary: string;
   reasoning: string;
@@ -47,7 +49,6 @@ export interface ReviewResult {
   concerns: string[];
   suggestions: string[];
   riskLevel: "low" | "medium" | "high";
-  shouldCreateDraft: boolean;
 }
 
 export class LLMService {
@@ -75,12 +76,17 @@ Body: ${issueBody}
 Repository Context: ${repoContext || "Not provided"}
 
 Analyze this issue and provide:
-1. The most appropriate task type (bug_fix, code_quality, documentation, security_audit, test_generation, refactor)
+1. The most appropriate task type (bug_fix, code_quality, documentation, security_audit, test_generation, refactor, structure_refactor)
 2. Confidence level (0-100)
 3. Priority level
 4. Estimated complexity
 5. Likely affected files or file patterns
 6. Specific suggestions for resolution
+
+Task type guidelines:
+- structure_refactor: Use when the issue involves moving/renaming entire directories, restructuring monorepo layout (e.g., packages/ to apps/), or reorganizing the project structure
+- refactor: Use for code refactoring within existing structure (renaming functions, classes, improving code organization)
+- bug_fix: Use for fixing bugs, errors, or incorrect behavior
 
 Respond in JSON format matching the IssueAnalysis interface.`;
 
@@ -93,159 +99,161 @@ Respond in JSON format matching the IssueAnalysis interface.`;
     codeContext: CodeContext,
     analysis: IssueAnalysis,
   ): Promise<CodeChanges> {
-    const prompt = `Generate a code fix for this issue:
+    const isStructuralChange =
+      issue.title.toLowerCase().includes("archi") ||
+      issue.title.toLowerCase().includes("structure") ||
+      issue.title.toLowerCase().includes("organize") ||
+      issue.title.toLowerCase().includes("move") ||
+      analysis.taskType === "refactor" ||
+      analysis.taskType === "structure_refactor";
 
-Issue: ${issue.title}
-Description: ${issue.body}
-Analysis: ${JSON.stringify(analysis, null, 2)}
-
-Code Context:
-${this.formatCodeContext(codeContext)}
-
-Generate the necessary code changes to fix this issue. Focus on:
-1. Minimal, targeted changes
-2. Following existing code patterns
-3. Maintaining backwards compatibility
-4. Adding appropriate error handling
-5. Including tests if needed
-
-Respond in JSON format matching the CodeChanges interface.`;
+    const prompt = isStructuralChange
+      ? this.buildStructuralChangePrompt(issue, codeContext, analysis)
+      : this.buildStandardFixPrompt(issue, codeContext, analysis);
 
     const response = await this.callLLM(prompt);
     return this.parseResponse<CodeChanges>(response);
   }
 
-  async reviewChanges(
-    changes: CodeChanges,
-    context: CodeContext,
-  ): Promise<ReviewResult> {
-    const prompt = `Review these code changes for quality and safety:
+  private buildStructuralChangePrompt(
+    issue: { title: string; body: string },
+    codeContext: CodeContext,
+    analysis: IssueAnalysis,
+  ): string {
+    return `You are an expert software architect tasked with RESTRUCTURING a repository.
 
-Changes Summary: ${changes.summary}
-Reasoning: ${changes.reasoning}
+Issue: ${issue.title}
+Description: ${issue.body}
+Analysis: ${JSON.stringify(analysis, null, 2)}
 
-Files Modified:
-${changes.files.map((f) => `${f.path} (${f.action})`).join("\n")}
+Current Repository Structure:
+${codeContext.structure}
+
+Dependencies: ${codeContext.dependencies.join(", ")}
+
+🚨 CRITICAL INSTRUCTIONS FOR STRUCTURAL CHANGES:
+
+This is a STRUCTURAL/ARCHITECTURAL task. You must:
+
+1. ANALYZE THE ENTIRE DIRECTORY STRUCTURE ABOVE
+2. IDENTIFY architectural antipatterns:
+   - Applications (backend, web, runner, api, etc.) should be in "apps/" ✓ CORRECT
+   - Shared libraries/packages in wrong locations
+   - Poor monorepo organization
+
+3. FOR MOVING ENTIRE DIRECTORIES, you MUST list EVERY SINGLE FILE in that directory:
+
+   EXAMPLE - If moving packages/backend/ to apps/backend/:
+   {
+     "files": [
+       { "action": "move", "oldPath": "packages/backend/src/index.ts", "path": "apps/backend/src/index.ts", "content": "..." },
+       { "action": "move", "oldPath": "packages/backend/src/routes/auth.ts", "path": "apps/backend/src/routes/auth.ts", "content": "..." },
+       { "action": "move", "oldPath": "packages/backend/package.json", "path": "apps/backend/package.json", "content": "..." },
+       { "action": "move", "oldPath": "packages/backend/tsconfig.json", "path": "apps/backend/tsconfig.json", "content": "..." },
+       ... LIST EVERY FILE IN THE DIRECTORY ...
+     ]
+   }
+
+4. ALSO UPDATE configuration files:
+   - Root package.json: Update workspaces ["packages/*"] → ["apps/*", "packages/*"]
+   - Update import paths in files that reference moved directories
+   - Update tsconfig.json, docker-compose.yml, any CI/CD configs
+
+5. MONOREPO BEST PRACTICES:
+   - apps/ = deployable applications (backend, frontend, api, web, mobile)
+   - packages/ = shared libraries/packages (shared, common, utils, ui-components)
+
+🎯 YOUR TASK:
+Based on the repository structure above, identify what needs to be moved and generate the complete file list with ALL files that need to move.
+
+Respond in JSON format:
+{
+  "files": [
+    {
+      "path": "new/path/to/file.ts",
+      "content": "full file content here...",
+      "action": "move",
+      "oldPath": "old/path/to/file.ts"
+    }
+  ],
+  "summary": "Brief summary of the restructuring",
+  "reasoning": "Explanation of why this restructuring is needed"
+}`;
+  }
+
+  private buildStandardFixPrompt(
+    issue: { title: string; body: string },
+    codeContext: CodeContext,
+    analysis: IssueAnalysis,
+  ): string {
+    return `Fix the following issue:
+
+Title: ${issue.title}
+Body: ${issue.body}
+Task Type: ${analysis.taskType}
 
 Code Context:
-${this.formatCodeContext(context)}
+${codeContext.files.map((f) => `File: ${f.path}\n${f.content}`).join("\n\n")}
 
-Evaluate:
-1. Code quality and adherence to best practices
-2. Potential breaking changes or side effects
-3. Security implications
-4. Performance impact
-5. Test coverage
-6. Whether this should be a draft PR initially
+Repository Structure: ${codeContext.structure}
+Dependencies: ${codeContext.dependencies.join(", ")}
 
-Respond in JSON format matching the ReviewResult interface.`;
-
-    const response = await this.callLLM(prompt);
-    return this.parseResponse<ReviewResult>(response);
-  }
-
-  async generateCommitMessage(changes: CodeChanges): Promise<string> {
-    const prompt = `Generate a conventional commit message for these changes:
-
-Summary: ${changes.summary}
-Files changed: ${changes.files.map((f) => f.path).join(", ")}
-
-Follow conventional commit format: type(scope): description`;
-
-    const response = await this.callLLM(prompt);
-    return response.trim();
-  }
-
-  async generatePRDescription(
-    issue: { title: string; body: string; number: number },
-    changes: CodeChanges,
-    analysis: IssueAnalysis,
-  ): Promise<string> {
-    const prompt = `Generate a comprehensive PR description for this fix:
-
-Issue: #${issue.number} - ${issue.title}
-Issue Description: ${issue.body}
-
-Changes Made: ${changes.summary}
-Files Modified: ${changes.files.length} files
-Complexity: ${analysis.estimatedComplexity}
-
-Generate a professional PR description that includes:
-- Brief summary of the fix
-- What was changed and why
-- How it addresses the issue
-- Any considerations for reviewers
-- Testing information
-
-Use GitHub markdown formatting.`;
-
-    const response = await this.callLLM(prompt);
-    return response;
+Provide a fix in JSON format with the changed files.`;
   }
 
   private async callLLM(prompt: string): Promise<string> {
     try {
-      return await this.callOpenAI(prompt);
+      const response = await axios.post(
+        `${this.baseUrl}/chat/completions`,
+        {
+          model: this.model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      return response.data.choices[0].message.content;
     } catch (error) {
       console.error("LLM API call failed:", error);
-      throw new Error(
-        `Failed to get AI response: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error("Failed to call LLM API");
     }
-  }
-
-  private async callOpenAI(prompt: string): Promise<string> {
-    const response = await axios.post(
-      `${this.baseUrl}/chat/completions`,
-      {
-        model: this.model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        max_tokens: 4000,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    return response.data.choices[0].message.content;
-  }
-
-  private formatCodeContext(context: CodeContext): string {
-    return `
-Repository Structure:
-${context.structure}
-
-Dependencies: ${context.dependencies.join(", ")}
-Test Framework: ${context.testFramework || "Not detected"}
-Build Tool: ${context.buildTool || "Not detected"}
-
-Relevant Files:
-${context.files
-  .map(
-    (f) => `
-=== ${f.path} (${f.language}) ===
-${f.content.slice(0, 2000)}${f.content.length > 2000 ? "..." : ""}
-`,
-  )
-  .join("\n")}
-`;
   }
 
   private parseResponse<T>(response: string): T {
     try {
-      const jsonMatch =
-        response.match(/```json\n([\s\S]*?)\n```/) ||
-        response.match(/```\n([\s\S]*?)\n```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : response;
-
-      return JSON.parse(jsonStr.trim());
+      // Extract JSON from the response (LLMs sometimes add extra text)
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("No JSON found in response");
+      }
+      return JSON.parse(jsonMatch[0]);
     } catch (error) {
       console.error("Failed to parse LLM response:", response);
-      throw new Error("Invalid JSON response from LLM");
+      throw new Error(`Invalid JSON response from LLM: ${error}`);
     }
+  }
+
+  async reviewCode(
+    codeChanges: CodeChanges,
+    originalCode: CodeContext,
+  ): Promise<ReviewResult> {
+    const prompt = `Review the following code changes for quality, correctness, and best practices:
+
+Original Code Context:
+${originalCode.structure}
+
+Proposed Changes:
+${JSON.stringify(codeChanges, null, 2)}
+
+Provide a review in JSON format with approval status and any concerns.`;
+
+    const response = await this.callLLM(prompt);
+    return this.parseResponse<ReviewResult>(response);
   }
 }
