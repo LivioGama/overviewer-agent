@@ -29,6 +29,26 @@ services:
       replicas: 1
     restart: unless-stopped
 
+  web:
+    build:
+      context: .
+      dockerfile: packages/runner/Dockerfile
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
+      - WORKSPACE_ROOT=/tmp/overviewer-workspaces
+    volumes:
+      - runner_workspaces:/tmp/overviewer-workspaces
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 1
+    restart: unless-stopped
+
 volumes:
   redis_data:
   runner_workspaces:
