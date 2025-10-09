@@ -9,27 +9,21 @@ services:
       timeout: 10s
       retries: 3
 
-  runner:
+  web:
     build:
       context: .
-      dockerfile: packages/runner/Dockerfile
+      dockerfile: packages/web/Dockerfile
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GITHUB_APP_ID=${GITHUB_APP_ID}
-      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
-      - WORKSPACE_ROOT=/tmp/overviewer-workspaces
-    volumes:
-      - runner_workspaces:/tmp/overviewer-workspaces
+    ports:
+      - "3000:3000"
     depends_on:
       redis:
         condition: service_healthy
-    deploy:
-      replicas: 1
     restart: unless-stopped
 
-  web:
+  runner:
     build:
       context: .
       dockerfile: packages/runner/Dockerfile

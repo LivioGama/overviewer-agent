@@ -5,7 +5,6 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/web/package.json ./packages/web/
 COPY packages/shared/package.json ./packages/shared/
-COPY packages/backend/package.json ./packages/backend/
 COPY packages/runner/package.json ./packages/runner/
 
 # Install dependencies using Bun
