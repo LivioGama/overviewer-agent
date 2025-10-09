@@ -1,6 +1,6 @@
+import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from 'redis';
-import { randomUUID } from 'crypto';
 
 const getRedisClient = async () => {
   const client = createClient({
@@ -10,9 +10,38 @@ const getRedisClient = async () => {
   return client;
 };
 
+const verifySignature = (payload: string, signature: string | null): boolean => {
+  if (!signature) return false;
+  
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) {
+    console.warn('GITHUB_WEBHOOK_SECRET not set - skipping signature verification');
+    return true;
+  }
+
+  const hmac = createHmac('sha256', secret);
+  const digest = 'sha256=' + hmac.update(payload).digest('hex');
+  
+  try {
+    return timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
+  } catch {
+    return false;
+  }
+};
+
 export async function POST(request: NextRequest) {
   try {
-    const payload = await request.json();
+    const body = await request.text();
+    const signature = request.headers.get('x-hub-signature-256');
+    
+    if (!verifySignature(body, signature)) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+    const payload = JSON.parse(body);
     const event = request.headers.get('x-github-event');
     
     if (!event || !payload.repository) {
