@@ -1,5 +1,16 @@
 {
   "services": {
+    "web": {
+      "ports": [],
+      "networks": {
+        "easypanel": {
+          "aliases": [
+            "liviogama_overviewer-agent_web"
+          ]
+        },
+        "default": null
+      }
+    },
     "runner": {
       "networks": {
         "easypanel": {
