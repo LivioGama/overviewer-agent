@@ -2,13 +2,13 @@ FROM oven/bun:1 AS builder
 WORKDIR /app
 
 # Copy workspace files
-COPY package.json bun.lock ./
+COPY package.json ./
 COPY packages/web/package.json ./packages/web/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/runner/package.json ./packages/runner/
 
 # Install dependencies using Bun
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source code
 COPY packages/shared ./packages/shared
