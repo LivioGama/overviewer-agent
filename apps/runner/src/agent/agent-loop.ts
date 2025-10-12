@@ -15,7 +15,7 @@ export class AgentLoop {
   private llm: LLMClient;
   private maxIterations: number;
 
-  constructor(maxIterations = 30) {
+  constructor(maxIterations = Number(process.env.MAX_ITERATIONS || 12)) {
     this.llm = new LLMClient();
     this.maxIterations = maxIterations;
   }
