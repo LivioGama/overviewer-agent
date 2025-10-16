@@ -48,7 +48,9 @@ docker compose -p liviogama_overviewer-agent up --build -d
 
 Make sure these are set in Easypanel:
 ```bash
-OPENAI_API_KEY=sk-...
+OLLAMA_API_KEY=your_api_key_from_ollama.com
+OLLAMA_API_URL=https://ollama.com/api
+OLLAMA_MODEL=glm-4.6
 GITHUB_APP_ID=your-app-id
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..."
 ```
@@ -139,7 +141,9 @@ docker logs liviogama_overviewer-agent-runner-1
 ```
 
 Common issues:
-- Missing OPENAI_API_KEY
+- Missing OLLAMA_API_KEY (get from https://ollama.com dashboard)
+- Invalid OLLAMA_API_URL (should be https://ollama.com/api)
+- Missing OLLAMA_MODEL environment variable
 - Redis not ready (wait for healthcheck)
 - TypeScript compilation errors (build locally first)
 

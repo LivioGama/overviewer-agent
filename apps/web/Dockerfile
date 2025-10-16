@@ -1,21 +1,23 @@
 FROM oven/bun:1 AS builder
 WORKDIR /app
 
-# Copy workspace files
-COPY package.json ./
-COPY packages/web/package.json ./packages/web/
+COPY package.json bun.lock* ./
+COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
-COPY packages/runner/package.json ./packages/runner/
+COPY apps/runner/package.json ./apps/runner/
 
-# Install dependencies using Bun
-RUN bun install
+RUN bun install --frozen-lockfile
 
-# Copy source code
+COPY tsconfig.json ./
 COPY packages/shared ./packages/shared
-COPY packages/web ./packages/web
 
-# Build the web application
-WORKDIR /app/packages/web
+WORKDIR /app/packages/shared
+RUN bun run build
+
+WORKDIR /app
+COPY apps/web ./apps/web
+
+WORKDIR /app/apps/web
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN bun run build
 
@@ -24,17 +26,26 @@ WORKDIR /app
 
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_PATH=/app/node_modules
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built application and ALL dependencies
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 
-# Create public directory (may not exist)
-RUN mkdir -p ./public
+# Fix broken symlinks from copying - repoint them to .bun structure
+RUN cd /app/node_modules && \
+    for link in $(find . -maxdepth 1 -type l); do \
+        target=$(readlink "$link" 2>/dev/null || true); \
+        if [[ "$target" == "../../../node_modules/.bun"* ]]; then \
+            newlink="${target#../../../node_modules/}"; \
+            rm "$link"; \
+            ln -s "$newlink" "$link"; \
+        fi; \
+    done
 
 USER nextjs
 

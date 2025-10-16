@@ -28,7 +28,12 @@
         "./src/*"
       ],
       "@overviewer-agent/shared": [
-        "../shared/src"
+        "../../packages/shared/src",
+        "../../packages/shared/dist"
+      ],
+      "@overviewer-agent/shared/*": [
+        "../../packages/shared/src/*",
+        "../../packages/shared/dist/*"
       ]
     }
   },

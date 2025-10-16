@@ -48,9 +48,55 @@ class RunnerService {
             await this.redis.xAck("job-queue", "processors", streamId);
           } catch (error) {
             console.error(`Job ${job.id} failed:`, error);
-            await this.updateJobStatus(job.id, "failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            
+            // Check if it's a retryable error (rate limiting or service issue)
+            const isRetryable = 
+              errorMessage.includes("429") ||
+              errorMessage.includes("503") ||
+              errorMessage.includes("Rate limited") ||
+              errorMessage.includes("Service unavailable");
+            
+            if (isRetryable) {
+              // Get current retry count from Redis
+              const currentRetryStr = await this.redis.hGet(`job:retry:${job.id}`, "count");
+              const retryCount = (currentRetryStr ? parseInt(currentRetryStr, 10) : 0) + 1;
+              const maxRetries = 5;
+              
+              if (retryCount <= maxRetries) {
+                // Calculate backoff: 1s, 2s, 4s, 8s, 16s
+                const backoffSeconds = Math.min(Math.pow(2, retryCount - 1), 60);
+                const retryAfter = new Date(Date.now() + backoffSeconds * 1000);
+                
+                console.log(`Re-queuing job ${job.id} (attempt ${retryCount}/${maxRetries}) after ${backoffSeconds}s`);
+                
+                // Update retry info
+                await this.redis.hSet(`job:retry:${job.id}`, {
+                  count: String(retryCount),
+                  lastError: errorMessage,
+                  retryAfter: retryAfter.toISOString(),
+                });
+                
+                // Re-add to queue
+                await this.redis.xAdd("job-queue", "*", {
+                  jobData: JSON.stringify(job),
+                });
+                
+                // Acknowledge the original message
+                await this.redis.xAck("job-queue", "processors", streamId);
+              } else {
+                console.error(`Job ${job.id} exhausted all retries`);
+                await this.updateJobStatus(job.id, "failed", {
+                  error: `Failed after ${maxRetries} retry attempts: ${errorMessage}`,
+                  totalRetries: retryCount,
+                });
+              }
+            } else {
+              // Non-retryable error
+              await this.updateJobStatus(job.id, "failed", {
+                error: errorMessage,
+              });
+            }
           }
         } else {
           await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -179,17 +225,56 @@ class RunnerService {
     const appPrivateKey = process.env.GITHUB_APP_PRIVATE_KEY!;
     const appId = process.env.GITHUB_APP_ID!;
     const jwt = this.createJWT(appId, appPrivateKey);
-    const response = await axios.post(
-      `https://api.github.com/app/installations/${installationId}/access_tokens`,
-      {},
-      {
-        headers: {
-          Authorization: `Bearer ${jwt}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-      },
-    );
-    return response.data.token;
+    
+    const maxRetries = 5;
+    const initialDelayMs = 1000;
+    const maxDelayMs = 30000;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await axios.post(
+          `https://api.github.com/app/installations/${installationId}/access_tokens`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${jwt}`,
+              Accept: "application/vnd.github.v3+json",
+            },
+            timeout: 10000, // 10 second timeout
+          },
+        );
+        return response.data.token;
+      } catch (error: any) {
+        const status = error.response?.status;
+        const isRetryable = status === 429 || status === 503 || (status && status >= 500 && status < 600);
+        
+        if (!isRetryable) {
+          console.error("Non-retryable GitHub API error:", {
+            status,
+            message: error.message,
+          });
+          throw error;
+        }
+        
+        if (attempt >= maxRetries) {
+          console.error(`GitHub API call exhausted all ${maxRetries} retry attempts`);
+          throw error;
+        }
+        
+        // Exponential backoff with jitter
+        const exponentialDelay = Math.min(
+          initialDelayMs * Math.pow(2, attempt - 1),
+          maxDelayMs,
+        );
+        const jitter = exponentialDelay * 0.2 * (Math.random() * 2 - 1);
+        const delayMs = exponentialDelay + jitter;
+        
+        console.warn(`[Attempt ${attempt}/${maxRetries}] GitHub API rate limited. Retrying in ${(delayMs / 1000).toFixed(1)}s...`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    throw new Error("Failed to get installation token after all retries");
   }
 
   private createJWT(appId: string, privateKey: string): string {

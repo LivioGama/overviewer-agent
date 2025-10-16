@@ -23,37 +23,37 @@ automation:
   # Task configurations
   tasks:
     refactor:
-      model: "gpt-4o"
+      model: "glm-4.6"
       max_tokens: 4000
       timeout: 300
       auto_fix: true
 
     test:
-      model: "gpt-4o"
+      model: "glm-4.6"
       max_tokens: 2000
       timeout: 180
       auto_fix: true
 
     docs:
-      model: "gpt-4o"
+      model: "glm-4.6"
       max_tokens: 3000
       timeout: 240
       auto_fix: false
 
     security:
-      model: "gpt-4o"
+      model: "glm-4.6"
       max_tokens: 4000
       timeout: 300
       report_only: false
 
     fix:
-      model: "gpt-4o"
+      model: "glm-4.6"
       max_tokens: 3000
       timeout: 300
       auto_fix: true
 
     quality:
-      model: "gpt-oss:120b"
+      model: "glm-4.6"
       max_tokens: 3000
       timeout: 240
       auto_fix: true

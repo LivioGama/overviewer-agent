@@ -15,7 +15,7 @@ automation:
 
   tasks:
     fix:
-      model: "gpt-4o"
+      model: "glm-4.6"
       max_tokens: 3000
       timeout: 300
       auto_fix: true

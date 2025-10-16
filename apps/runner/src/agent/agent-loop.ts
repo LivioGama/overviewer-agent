@@ -60,10 +60,40 @@ Your task: Analyze and fix this issue autonomously. Start by exploring the repos
         iteration++;
         console.log(`\n=== Agent Iteration ${iteration} ===`);
 
-        const thought = await this.llm.generateThought(
-          systemPrompt,
-          conversationHistory,
-        );
+        let thought;
+        try {
+          thought = await this.llm.generateThought(
+            systemPrompt,
+            conversationHistory,
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          
+          // Check if it's a rate limiting error
+          if (errorMessage.includes("429") || errorMessage.includes("Too Many Requests")) {
+            console.error("Rate limited by LLM API. Job will be retried later.");
+            return {
+              success: false,
+              summary: "Rate limited by LLM API. Job queued for retry.",
+              iterations: iteration,
+              error: "Rate limited (429) - will retry",
+            };
+          }
+          
+          // Check if it's a temporary service error
+          if (errorMessage.includes("503") || errorMessage.includes("Service Unavailable")) {
+            console.error("LLM service temporarily unavailable. Job will be retried later.");
+            return {
+              success: false,
+              summary: "LLM service temporarily unavailable. Job queued for retry.",
+              iterations: iteration,
+              error: "Service unavailable (503) - will retry",
+            };
+          }
+          
+          // For other errors, throw to be caught by outer catch
+          throw error;
+        }
 
         console.log(`Reasoning: ${thought.reasoning}`);
 
