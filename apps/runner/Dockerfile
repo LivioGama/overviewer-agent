@@ -27,8 +27,7 @@ RUN apk add --no-cache git openssh-client curl
 
 WORKDIR /app
 
-COPY --from=builder /app/apps/runner/dist ./apps/runner/dist
-COPY --from=builder /app/apps/runner/package.json ./apps/runner/package.json
+COPY --from=builder /app/apps/runner/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=builder /app/node_modules ./node_modules
@@ -44,4 +43,4 @@ RUN git config --global user.email "bot@overviewer-agent.local" && \
     git config --global user.name "Overviewer Agent" && \
     git config --global init.defaultBranch main
 
-CMD ["node", "apps/runner/dist/index.js"]
+CMD ["node", "dist/index.js"]
