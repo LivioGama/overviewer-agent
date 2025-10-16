@@ -15,7 +15,8 @@ COPY apps/runner ./apps/runner
 WORKDIR /app/packages/shared
 RUN bunx tsc || echo "No build needed for shared"
 
-WORKDIR /app/packages/runner
+WORKDIR /app/apps/runner
+RUN bun install
 RUN bunx tsc
 
 FROM node:20-alpine AS runner

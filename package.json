@@ -4,7 +4,8 @@
   "private": true,
   "description": "GitHub App that runs automation/agent tasks against repositories in the cloud",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "dev": "bun run --filter=backend dev",

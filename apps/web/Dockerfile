@@ -16,6 +16,7 @@ COPY apps/web ./apps/web
 
 # Build the web application
 WORKDIR /app/apps/web
+RUN bun install
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN bun run build
 
