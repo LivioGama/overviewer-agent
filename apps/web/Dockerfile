@@ -3,19 +3,19 @@ WORKDIR /app
 
 # Copy workspace files
 COPY package.json ./
-COPY packages/web/package.json ./packages/web/
+COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
-COPY packages/runner/package.json ./packages/runner/
+COPY apps/runner/package.json ./apps/runner/
 
 # Install dependencies using Bun
 RUN bun install
 
 # Copy source code
 COPY packages/shared ./packages/shared
-COPY packages/web ./packages/web
+COPY apps/web ./apps/web
 
 # Build the web application
-WORKDIR /app/packages/web
+WORKDIR /app/apps/web
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN bun run build
 

@@ -3,14 +3,14 @@ FROM oven/bun:1 AS builder
 WORKDIR /app
 
 COPY package.json ./
-COPY packages/runner/package.json ./packages/runner/
+COPY apps/runner/package.json ./apps/runner/
 COPY packages/shared/package.json ./packages/shared/
 COPY tsconfig.json ./
 
 RUN bun install
 
 COPY packages/shared ./packages/shared
-COPY packages/runner ./packages/runner
+COPY apps/runner ./apps/runner
 
 WORKDIR /app/packages/shared
 RUN bunx tsc || echo "No build needed for shared"
