@@ -24,8 +24,8 @@ RUN apk add --no-cache git openssh-client curl
 
 WORKDIR /app
 
-COPY --from=builder /app/packages/runner/dist/runner/src ./dist
-COPY --from=builder /app/packages/runner/package.json ./package.json
+COPY --from=builder /app/apps/runner/dist/runner/src ./dist
+COPY --from=builder /app/apps/runner/package.json ./package.json
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder /app/node_modules ./node_modules
 

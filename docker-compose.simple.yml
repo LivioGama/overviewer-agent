@@ -14,7 +14,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: packages/web/Dockerfile
+      dockerfile: apps/web/Dockerfile
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
@@ -29,7 +29,7 @@ services:
   runner:
     build:
       context: .
-      dockerfile: packages/runner/Dockerfile
+      dockerfile: apps/runner/Dockerfile
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
