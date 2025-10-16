@@ -15,11 +15,18 @@ export class LLMClient {
   private apiKey: string;
   private baseUrl: string;
   private model: string;
+  private maxTokens: number;
+  private temperature: number;
+  private historyWindow: number;
 
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY || "";
-    this.baseUrl = "https://api.openai.com/v1";
-    this.model = "gpt-4o";
+    this.baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+    // Default to a lower-cost model but allow override via env
+    this.model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    this.maxTokens = Number(process.env.OPENAI_MAX_TOKENS || 500);
+    this.temperature = Number(process.env.OPENAI_TEMPERATURE || 0.1);
+    this.historyWindow = Math.max(1, Number(process.env.HISTORY_WINDOW || 8));
   }
 
   async generateThought(
@@ -27,15 +34,21 @@ export class LLMClient {
     conversationHistory: Array<{ role: string; content: string }>,
   ): Promise<AgentThought> {
     try {
+      // Keep only the most recent messages to cap token usage
+      const trimmedHistory = conversationHistory.slice(-this.historyWindow);
+
       const response = await axios.post(
         `${this.baseUrl}/chat/completions`,
         {
           model: this.model,
           messages: [
             { role: "system", content: systemPrompt },
-            ...conversationHistory,
+            ...trimmedHistory,
           ],
-          temperature: 0.1,
+          temperature: this.temperature,
+          max_tokens: this.maxTokens,
+          // Prefer structured output to reduce retries/parsing errors
+          response_format: { type: "json_object" },
         },
         {
           headers: {

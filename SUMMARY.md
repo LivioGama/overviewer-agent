@@ -245,3 +245,18 @@ A true AI agent that **thinks, reasons, and decides** autonomously. It can handl
 4. Tune max iterations and reasoning strategies
 5. Implement memory and learning systems
 
+---
+
+## ⚙️ New Environment Variables (Cost/Performance)
+
+These knobs were added to reduce cost and improve responsiveness without changing behavior:
+
+- OPENAI_MODEL: Default "gpt-4o-mini" (cheaper, good quality). Override to any supported model.
+- OPENAI_BASE_URL: Optional, defaults to https://api.openai.com/v1
+- OPENAI_MAX_TOKENS: Default 500 output tokens cap.
+- OPENAI_TEMPERATURE: Default 0.1 for stable outputs.
+- HISTORY_WINDOW: Default 8; only the last N messages are sent to the LLM each iteration to cap input tokens.
+- MAX_ITERATIONS: Default 12; upper bound on agent loop iterations.
+
+All are optional and can be tuned per deployment to balance quality, latency, and spend.
+
