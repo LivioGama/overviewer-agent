@@ -10,7 +10,7 @@
         "typescript": "^5.0.0",
       },
     },
-    "packages/runner": {
+    "apps/runner": {
       "name": "@overviewer-agent/runner",
       "version": "1.0.0",
       "dependencies": {
@@ -25,22 +25,7 @@
         "typescript": "^5.3.3",
       },
     },
-    "packages/shared": {
-      "name": "@overviewer-agent/shared",
-      "version": "0.1.0",
-      "dependencies": {
-        "uuid": "^9.0.0",
-        "zod": "^3.22.0",
-      },
-      "devDependencies": {
-        "@types/uuid": "^9.0.0",
-        "@typescript-eslint/eslint-plugin": "^6.0.0",
-        "@typescript-eslint/parser": "^6.0.0",
-        "eslint": "^8.0.0",
-        "typescript": "^5.0.0",
-      },
-    },
-    "packages/web": {
+    "apps/web": {
       "name": "@overviewer-agent/web",
       "version": "0.1.0",
       "dependencies": {
@@ -71,6 +56,21 @@
         "@types/react-dom": "^18.0.0",
         "eslint": "^8.0.0",
         "eslint-config-next": "^14.0.0",
+        "typescript": "^5.0.0",
+      },
+    },
+    "packages/shared": {
+      "name": "@overviewer-agent/shared",
+      "version": "0.1.0",
+      "dependencies": {
+        "uuid": "^9.0.0",
+        "zod": "^3.22.0",
+      },
+      "devDependencies": {
+        "@types/uuid": "^9.0.0",
+        "@typescript-eslint/eslint-plugin": "^6.0.0",
+        "@typescript-eslint/parser": "^6.0.0",
+        "eslint": "^8.0.0",
         "typescript": "^5.0.0",
       },
     },
@@ -194,11 +194,11 @@
 
     "@octokit/types": ["@octokit/types@13.10.0", "", { "dependencies": { "@octokit/openapi-types": "^24.2.0" } }, "sha512-ifLaO34EbbPj0Xgro4G5lP5asESjwHracYJvVaPIyXMuiuXLlhic3S47cBdTb+jfODkTE5YtGCLt3Ay3+J97sA=="],
 
-    "@overviewer-agent/runner": ["@overviewer-agent/runner@workspace:packages/runner"],
+    "@overviewer-agent/runner": ["@overviewer-agent/runner@workspace:apps/runner"],
 
     "@overviewer-agent/shared": ["@overviewer-agent/shared@workspace:packages/shared"],
 
-    "@overviewer-agent/web": ["@overviewer-agent/web@workspace:packages/web"],
+    "@overviewer-agent/web": ["@overviewer-agent/web@workspace:apps/web"],
 
     "@panva/hkdf": ["@panva/hkdf@1.2.1", "", {}, "sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw=="],
 
