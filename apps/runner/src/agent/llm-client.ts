@@ -143,7 +143,35 @@ export class LLMClient {
         );
 
         console.log(`[LLM Response] Success - received response from ${this.baseUrl}`);
-        const content = response.data.choices[0].message.content;
+        console.log(`[LLM Response] Full response:`, JSON.stringify(response.data, null, 2));
+        console.log(`[LLM Response] Response keys:`, Object.keys(response.data));
+        console.log(`[LLM Response] Has 'choices'?`, !!response.data.choices);
+        console.log(`[LLM Response] Has 'message'?`, !!response.data.message);
+        console.log(`[LLM Response] Has 'content'?`, !!response.data.content);
+        
+        // Try multiple response formats
+        let content: string;
+        
+        if (response.data.choices && response.data.choices[0]?.message?.content) {
+          // OpenAI-style response
+          content = response.data.choices[0].message.content;
+        } else if (response.data.message?.content) {
+          // Ollama direct response format
+          content = response.data.message.content;
+        } else if (response.data.content) {
+          // Simple content field
+          content = response.data.content;
+        } else if (typeof response.data === 'string') {
+          // Plain string response
+          content = response.data;
+        } else {
+          // Fallback: convert entire response to string
+          console.error('[LLM Response] Could not find content in any expected format');
+          console.error('[LLM Response] Full response structure:', JSON.stringify(response.data, null, 2));
+          throw new Error('Unable to extract content from LLM response - unexpected format');
+        }
+        
+        console.log(`[LLM Response] Extracted content (first 200 chars):`, content.substring(0, 200));
         return this.parseThought(content);
       } catch (error) {
         const axiosError = error as AxiosError;
