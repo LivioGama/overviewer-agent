@@ -1,6 +1,7 @@
 import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from 'redis';
+import { getIssueStatus } from '../../../../../../packages/shared/src/utils/github';
 
 const getRedisClient = async () => {
   const client = createClient({
@@ -72,6 +73,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Event ignored' });
     }
 
+    const issueStatus = await getIssueStatus(payload.repository.owner.login, payload.repository.name, issueNumber);
+
     const job = {
       id: randomUUID(),
       installationId: payload.installation?.id || 0,
@@ -84,6 +87,7 @@ export async function POST(request: NextRequest) {
         issueNumber,
         issueTitle,
         issueBody,
+        issueStatus,
       },
       status: 'queued',
       createdAt: new Date().toISOString(),

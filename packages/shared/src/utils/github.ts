@@ -1,3 +1,5 @@
+import { Octokit } from '@octokit/rest';
+
 export const parseCommand = (commentBody: string) => {
   const commandPattern = /^\/(\w+)(?:\s+(.+))?$/m;
   const match = commentBody.trim().match(commandPattern);
@@ -46,4 +48,19 @@ export const formatDuration = (startTime: Date, endTime?: Date): string => {
   }
 
   return `${Math.round(duration / 60000)}m`;
+};
+
+export const getIssueStatus = async (owner: string, repo: string, issueNumber: number): Promise<string> => {
+  const octokit = new Octokit();
+  try {
+    const { data } = await octokit.issues.get({
+      owner,
+      repo,
+      issue_number: issueNumber,
+    });
+    return data.state; // 'open' or 'closed'
+  } catch (error) {
+    console.error('Error fetching issue status:', error);
+    throw error;
+  }
 };
