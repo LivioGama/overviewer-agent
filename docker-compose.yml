@@ -44,7 +44,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - LLM_PROVIDER=claude
       - CLAUDE_BRIDGE_URL=http://host.docker.internal:8001
-      - CLAUDE_MODEL=claude-3-5-haiku-20241022
+      - CLAUDE_MODEL=claude-haiku-4-5-20251001
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - WEAVIATE_URL=http://weaviate:8080
       - GITHUB_APP_ID=${GITHUB_APP_ID}
