@@ -3,6 +3,7 @@
 import { Job } from "@overviewer-agent/shared";
 import axios from "axios";
 import { useEffect, useState } from "react";
+import { LLMConfigPanel } from "./LLMConfigPanel";
 
 interface DashboardStats {
   totalJobs: number;
@@ -91,6 +92,9 @@ export const Dashboard = () => {
           </div>
         )}
       </div>
+
+      {/* LLM Config Panel */}
+      <LLMConfigPanel />
     </div>
   );
 };
