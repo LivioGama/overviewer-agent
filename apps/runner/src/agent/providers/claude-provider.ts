@@ -10,7 +10,7 @@ export class ClaudeProvider implements LLMProvider {
 
   constructor() {
     this.bridgeUrl = process.env.CLAUDE_BRIDGE_URL || "http://localhost:8001";
-    this.model = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20241022";
+    this.model = process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022";
     this.retryConfig = {
       maxRetries: 5,
       initialDelayMs: 1000,
