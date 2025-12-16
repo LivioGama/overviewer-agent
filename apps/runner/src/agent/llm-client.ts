@@ -1,5 +1,5 @@
-import axios, { AxiosError } from "axios";
 import { Tool } from "../tools/index.js";
+import { LLMProvider, OpenAIProvider, ClaudeProvider } from "./providers/index.js";
 
 export interface AgentThought {
   reasoning: string;
@@ -11,236 +11,31 @@ export interface AgentThought {
   finalAnswer?: string;
 }
 
-interface RetryConfig {
-  maxRetries: number;
-  initialDelayMs: number;
-  maxDelayMs: number;
-  backoffMultiplier: number;
-}
-
 export class LLMClient {
-  private apiKey: string;
-  private baseUrl: string;
-  private model: string;
-  private retryConfig: RetryConfig;
-  private lastRequestTime: number = 0;
-  private minRequestInterval: number = 100; // Minimum ms between requests
+  private provider: LLMProvider;
 
   constructor() {
-    this.apiKey = process.env.OLLAMA_API_KEY || "";
-    this.baseUrl = process.env.OLLAMA_API_URL || "https://ollama.com/api";
-    this.model = process.env.OLLAMA_MODEL || "glm-4.6";
-    this.retryConfig = {
-      maxRetries: 5,
-      initialDelayMs: 1000,
-      maxDelayMs: 60000,
-      backoffMultiplier: 2,
-    };
- 
-    // Log initialization
-    console.log("═══════════════════════════════════════════════════════════");
-    console.log("🔧 LLMClient Initialization");
-    console.log("═══════════════════════════════════════════════════════════");
-    console.log(`Base URL: ${this.baseUrl}`);
-    console.log(`Model: ${this.model}`);
-    console.log(`API Key Set: ${this.apiKey ? "✅ YES" : "❌ NO"}`);
-    console.log(`API Key Length: ${this.apiKey?.length || 0} chars`);
-    console.log("═══════════════════════════════════════════════════════════");
-  }
+    const providerType = process.env.LLM_PROVIDER || "openai";
 
-  private async delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private async enforceRateLimit(): Promise<void> {
-    const timeSinceLastRequest = Date.now() - this.lastRequestTime;
-    if (timeSinceLastRequest < this.minRequestInterval) {
-      await this.delay(this.minRequestInterval - timeSinceLastRequest);
-    }
-    this.lastRequestTime = Date.now();
-  }
-
-  private getRetryDelay(
-    attemptNumber: number,
-    retryAfterHeader?: string,
-  ): number {
-    // If server provided a Retry-After header, use it
-    if (retryAfterHeader) {
-      const retryAfterSeconds = parseInt(retryAfterHeader, 10);
-      if (!isNaN(retryAfterSeconds)) {
-        return retryAfterSeconds * 1000;
-      }
+    switch (providerType.toLowerCase()) {
+      case "openai":
+        this.provider = new OpenAIProvider();
+        break;
+      case "claude":
+        this.provider = new ClaudeProvider();
+        break;
+      default:
+        throw new Error(`Unsupported LLM provider: ${providerType}. Supported: openai, claude`);
     }
 
-    // Exponential backoff with jitter
-    const exponentialDelay = Math.min(
-      this.retryConfig.initialDelayMs *
-        Math.pow(this.retryConfig.backoffMultiplier, attemptNumber - 1),
-      this.retryConfig.maxDelayMs,
-    );
-
-    // Add jitter (±20%)
-    const jitter = exponentialDelay * 0.2 * (Math.random() * 2 - 1);
-    return exponentialDelay + jitter;
-  }
-
-  private isRetryableError(error: AxiosError): boolean {
-    const status = error.response?.status;
-
-    // 429: Too Many Requests - Always retry
-    if (status === 429) return true;
-
-    // 503: Service Unavailable - Retry
-    if (status === 503) return true;
-
-    // 500-599: Server errors - Retry with caution
-    if (status && status >= 500 && status < 600) return true;
-
-    // Network errors - Retry
-    if (error.code === "ECONNRESET" || error.code === "ETIMEDOUT") return true;
-
-    return false;
+    console.log(`LLM Client initialized with provider: ${providerType}`);
   }
 
   async generateThought(
     systemPrompt: string,
     conversationHistory: Array<{ role: string; content: string }>,
   ): Promise<AgentThought> {
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= this.retryConfig.maxRetries; attempt++) {
-      try {
-        // Enforce local rate limiting
-        await this.enforceRateLimit();
-
-        // Build the request URL and payload
-        const url = `${this.baseUrl}/chat`;
-        const payload = {
-          model: this.model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...conversationHistory,
-          ],
-          temperature: 0.1,
-          stream: false,
-        };
-
-        // Log request details for debugging
-        console.log(`[LLM Request] URL: ${url}`);
-        console.log(`[LLM Request] Model: ${this.model}`);
-        console.log(`[LLM Request] Has API Key: ${this.apiKey ? "yes" : "NO - MISSING!"}`);
-
-        const response = await axios.post(
-          url,
-          payload,
-          {
-            timeout: 30000, // 30 second timeout
-            headers: {
-              Authorization: `Bearer ${this.apiKey}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        console.log(`[LLM Response] Success - received response from ${this.baseUrl}`);
-        console.log(`[LLM Response] Full response:`, JSON.stringify(response.data, null, 2));
-        console.log(`[LLM Response] Response keys:`, Object.keys(response.data));
-        console.log(`[LLM Response] Has 'choices'?`, !!response.data.choices);
-        console.log(`[LLM Response] Has 'message'?`, !!response.data.message);
-        console.log(`[LLM Response] Has 'content'?`, !!response.data.content);
-        
-        // Try multiple response formats
-        let content: string;
-        
-        if (response.data.choices && response.data.choices[0]?.message?.content) {
-          // OpenAI-style response
-          content = response.data.choices[0].message.content;
-        } else if (response.data.message?.content) {
-          // Ollama direct response format
-          content = response.data.message.content;
-        } else if (response.data.content) {
-          // Simple content field
-          content = response.data.content;
-        } else if (typeof response.data === 'string') {
-          // Plain string response
-          content = response.data;
-        } else {
-          // Fallback: convert entire response to string
-          console.error('[LLM Response] Could not find content in any expected format');
-          console.error('[LLM Response] Full response structure:', JSON.stringify(response.data, null, 2));
-          throw new Error('Unable to extract content from LLM response - unexpected format');
-        }
-        
-        console.log(`[LLM Response] Extracted content (first 200 chars):`, content.substring(0, 200));
-        return this.parseThought(content);
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        // Log the error
-        const status = axiosError.response?.status;
-        console.error(`[Attempt ${attempt}/${this.retryConfig.maxRetries}] LLM API call failed:`, {
-          status,
-          statusText: axiosError.response?.statusText,
-          message: axiosError.message,
-          code: axiosError.code,
-        });
-
-        // Check if error is retryable
-        if (!this.isRetryableError(axiosError)) {
-          console.error(
-            "Non-retryable error, giving up:",
-            axiosError.message,
-          );
-          throw new Error(`Failed to call LLM API: ${axiosError.message}`);
-        }
-
-        // Check if we've exhausted retries
-        if (attempt >= this.retryConfig.maxRetries) {
-          console.error(
-            `Exhausted all ${this.retryConfig.maxRetries} retry attempts`,
-          );
-          throw new Error(
-            `Failed to call LLM API after ${this.retryConfig.maxRetries} attempts: ${lastError.message}`,
-          );
-        }
-
-        // Calculate delay
-        const retryAfter = axiosError.response?.headers[
-          "retry-after"
-        ] as string | undefined;
-        const delayMs = this.getRetryDelay(attempt, retryAfter);
-
-        console.log(
-          `Retrying in ${(delayMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.retryConfig.maxRetries})...`,
-        );
-        await this.delay(delayMs);
-      }
-    }
-
-    throw new Error(
-      `Failed to call LLM API after all retries: ${lastError?.message}`,
-    );
-  }
-
-  private parseThought(content: string): AgentThought {
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return {
-          reasoning: content,
-          finished: true,
-          finalAnswer: "Unable to parse response",
-        };
-      }
-      return JSON.parse(jsonMatch[0]);
-    } catch (error) {
-      return {
-        reasoning: content,
-        finished: true,
-        finalAnswer: content,
-      };
-    }
+    return this.provider.generateThought(systemPrompt, conversationHistory);
   }
 
   buildSystemPrompt(tools: Tool[]): string {

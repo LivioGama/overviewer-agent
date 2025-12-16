@@ -10,15 +10,16 @@
     "start": "node ./dist/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@octokit/rest": "^20.0.2",
     "@overviewer-agent/shared": "workspace:*",
     "axios": "^1.6.2",
     "redis": "^4.6.11",
-    "simple-git": "^3.21.0"
+    "simple-git": "^3.21.0",
+    "weaviate-ts-client": "^2.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.4",
     "typescript": "^5.3.3"
   }
 }
-

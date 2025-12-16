@@ -1,6 +1,10 @@
 import { Octokit } from "@octokit/rest";
-import { Job } from "@overviewer-agent/shared";
+import { Job, INITIAL_COMMENT_TEMPLATE, renderTemplate } from "@overviewer-agent/shared";
 import { simpleGit } from "simple-git";
+import { CodeIndexer } from "../services/code-indexer.js";
+import { ContextManager } from "../services/context-manager.js";
+import { EmbeddingService } from "../services/embedding-service.js";
+import { MemoryStore } from "../services/memory-store.js";
 import { getAllTools, getToolByName, ToolContext } from "../tools/index.js";
 import { LLMClient } from "./llm-client.js";
 
@@ -13,10 +17,16 @@ export interface AgentResult {
 
 export class AgentLoop {
   private llm: LLMClient;
+  private embeddingService: EmbeddingService;
+  private memoryStore: MemoryStore;
+  private contextManager: ContextManager;
   private maxIterations: number;
 
   constructor(maxIterations = 30) {
     this.llm = new LLMClient();
+    this.embeddingService = new EmbeddingService();
+    this.memoryStore = new MemoryStore(this.embeddingService);
+    this.contextManager = new ContextManager(this.embeddingService);
     this.maxIterations = maxIterations;
   }
 
@@ -29,15 +39,60 @@ export class AgentLoop {
     const systemPrompt = this.llm.buildSystemPrompt(tools);
     const conversationHistory: Array<{ role: string; content: string }> = [];
 
+    if (job.taskParams.issueNumber) {
+      try {
+        const initialComment = renderTemplate(INITIAL_COMMENT_TEMPLATE, {
+          issue_summary: job.taskParams.issueTitle || "this issue",
+          issue_type: job.taskType || "bug_fix",
+          complexity: "medium",
+          task_type: job.taskType || "bug_fix",
+        });
+
+        await octokit.rest.issues.createComment({
+          owner: job.repoOwner,
+          repo: job.repoName,
+          issue_number: job.taskParams.issueNumber,
+          body: initialComment,
+        });
+        console.log(`Posted initial comment on issue #${job.taskParams.issueNumber}`);
+      } catch (error) {
+        console.warn("Failed to post initial comment:", error);
+      }
+    }
+
+    // Phase 1: Initialize embeddings and index tools
+    await this.embeddingService.initialize();
+    console.log("Indexing tools for semantic matching...");
+    for (const tool of tools) {
+      await this.embeddingService.indexTool(
+        tool.name,
+        tool.description,
+        JSON.stringify(tool.parameters)
+      );
+    }
+
+    // Phase 2: Index repository code
+    const codeIndexer = new CodeIndexer(this.embeddingService);
+    await codeIndexer.indexRepository(workspace);
+
     const context: ToolContext = {
       workspace,
       repoOwner: job.repoOwner,
       repoName: job.repoName,
       issueNumber: job.taskParams.issueNumber,
       octokit,
+      codeIndexer,
     };
 
-    const initialPrompt = `
+    // Phase 3: Search for similar solutions in memory
+    await this.memoryStore.initialize();
+    const similarSolutions = await this.memoryStore.findSimilarSolutions(
+      job.taskParams.issueTitle || "",
+      job.taskParams.issueBody || "",
+      3
+    );
+
+    let initialPrompt = `
 Issue Title: ${job.taskParams.issueTitle || "No title"}
 
 Issue Description:
@@ -46,6 +101,18 @@ ${job.taskParams.issueBody || job.taskParams.args || "No description provided"}
 Repository: ${job.repoOwner}/${job.repoName}
 
 Your task: Analyze and fix this issue autonomously. Start by exploring the repository structure.`;
+
+    if (similarSolutions.length > 0 && similarSolutions[0].score > 0.8) {
+      const memory = similarSolutions[0];
+      console.log(`Found similar solution (${(memory.score * 100).toFixed(1)}% match): ${memory.issueTitle}`);
+      
+      initialPrompt += `\n\nHINT: Similar issue was solved before:
+Issue: ${memory.issueTitle}
+Solution: ${memory.solution}
+Files modified: ${memory.filesModified.join(", ")}
+
+You may use this as guidance, but analyze the current issue independently.`;
+    }
 
     conversationHistory.push({
       role: "user",
@@ -60,11 +127,18 @@ Your task: Analyze and fix this issue autonomously. Start by exploring the repos
         iteration++;
         console.log(`\n=== Agent Iteration ${iteration} ===`);
 
+        // Phase 4: Compress context if needed
+        const currentGoal = `Fix issue: ${job.taskParams.issueTitle}`;
+        const compressedHistory = await this.contextManager.compressHistory(
+          conversationHistory,
+          currentGoal
+        );
+
         let thought;
         try {
           thought = await this.llm.generateThought(
             systemPrompt,
-            conversationHistory,
+            compressedHistory,
           );
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -109,7 +183,24 @@ Your task: Analyze and fix this issue autonomously. Start by exploring the repos
         }
 
         if (thought.action) {
-          const tool = getToolByName(thought.action.tool);
+          let tool = getToolByName(thought.action.tool);
+          
+          // Phase 1: Use semantic matching if tool not found
+          if (!tool) {
+            const suggestions = await this.embeddingService.findSimilarTools(
+              thought.action.tool,
+              1
+            );
+
+            if (suggestions[0]?.score > 0.7) {
+              console.log(`Tool "${thought.action.tool}" not found, using "${suggestions[0].name}" (score: ${suggestions[0].score.toFixed(2)})`);
+              tool = getToolByName(suggestions[0].name);
+              if (tool) {
+                thought.action.tool = suggestions[0].name;
+              }
+            }
+          }
+
           if (!tool) {
             const errorMsg = `Unknown tool: ${thought.action.tool}`;
             console.error(errorMsg);
@@ -145,6 +236,9 @@ Your task: Analyze and fix this issue autonomously. Start by exploring the repos
         };
       }
 
+      // Phase 3: Store successful solution in memory
+      await this.storeSuccessfulMemory(job, finalAnswer);
+
       return {
         success: true,
         summary: finalAnswer,
@@ -158,6 +252,22 @@ Your task: Analyze and fix this issue autonomously. Start by exploring the repos
         iterations: iteration,
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  private async storeSuccessfulMemory(job: Job, solution: string): Promise<void> {
+    try {
+      await this.memoryStore.storeMemory({
+        jobId: job.id,
+        issueTitle: job.taskParams.issueTitle || "",
+        issueBody: job.taskParams.issueBody || "",
+        solution,
+        filesModified: [],
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Failed to store memory:", error);
     }
   }
 

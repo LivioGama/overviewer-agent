@@ -15,6 +15,7 @@ export interface ToolContext {
   repoName: string;
   issueNumber?: number;
   octokit: any;
+  codeIndexer?: any;
 }
 
 export interface ToolResult {

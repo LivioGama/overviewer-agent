@@ -95,8 +95,8 @@ export class ClaudeProvider implements LLMProvider {
 
         // Extract content from Claude response
         const content = response.content
-          .filter(block => block.type === 'text')
-          .map(block => block.type === 'text' ? block.text : '')
+          .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+          .map((block) => block.text)
           .join('');
 
         return this.parseThought(content);
