@@ -33,9 +33,10 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
-      - OLLAMA_API_URL=${OLLAMA_API_URL:-https://ollama.com/api}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.6}
+      - LLM_PROVIDER=openai
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_URL=${OPENAI_API_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
       - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
       - WORKSPACE_ROOT=/tmp/overviewer-workspaces
