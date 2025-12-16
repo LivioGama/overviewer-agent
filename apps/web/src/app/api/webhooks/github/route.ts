@@ -56,12 +56,12 @@ export async function POST(request: NextRequest) {
     let issueTitle = '';
     let issueBody = '';
 
-    if (event === 'issues' && payload.action === 'opened') {
+    if (event === 'issues' && (payload.action === 'opened' || payload.action === 'edited')) {
       shouldProcess = true;
       issueNumber = payload.issue.number;
       issueTitle = payload.issue.title;
       issueBody = payload.issue.body || '';
-    } else if (event === 'issue_comment' && payload.action === 'created') {
+    } else if (event === 'issue_comment' && (payload.action === 'created' || payload.action === 'edited')) {
       shouldProcess = payload.comment.body.includes('@overviewer');
       issueNumber = payload.issue.number;
       issueTitle = payload.issue.title;
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       installationId: payload.installation?.id || 0,
       repoOwner: payload.repository.owner.login,
       repoName: payload.repository.name,
-      triggerType: event === 'issues' ? 'issue_opened' : 'comment',
+      triggerType: event === 'issues' ? 'issue_opened_or_edited' : 'comment_created_or_edited',
       triggerPayload: payload,
       taskType: 'bug_fix',
       taskParams: {
