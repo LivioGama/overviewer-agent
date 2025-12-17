@@ -38,6 +38,7 @@ jobs:
                 "id": "kilocode-1",
                 "provider": "kilocode",
                 "kilocodeToken": "${KILOCODE_API_KEY}",
+                "baseUrl": "https://api.kilocode.ai",
                 "kilocodeModel": "x-ai/grok-code-fast-1"
               }
             ],
