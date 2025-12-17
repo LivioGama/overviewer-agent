@@ -14,12 +14,7 @@ export const runKiloCode = async (
   console.log(`[${new Date().toISOString()}] Running Kilo Code for issue #${issueNumber}`);
   
   return new Promise((resolve, reject) => {
-    const kiloProcess = spawn('kilocode', [
-      '--auto',
-      '--yolo',
-      '--timeout', '600',
-      prompt
-    ], {
+    const kiloProcess = spawn('sh', ['-c', `echo "" | kilocode --auto --yolo --json --timeout 600 "${prompt.replace(/"/g, '\\"')}"`], {
       cwd: repoPath,
       env: {
         ...process.env,
@@ -27,7 +22,7 @@ export const runKiloCode = async (
         KILOCODE_MODEL: 'x-ai/grok-code-fast-1',
         KILOCODE_BASE_URL: 'https://api.kilocode.ai'
       },
-      stdio: 'pipe'
+      stdio: ['pipe', 'pipe', 'pipe']
     });
 
     let output = '';
