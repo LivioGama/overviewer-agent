@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
     }
 
     let shouldProcess = false;
-    let useKiloAgent = false;
     let issueNumber: number | undefined;
     let issueTitle = '';
     let issueBody = '';
@@ -63,7 +62,6 @@ export async function POST(request: NextRequest) {
       issueNumber = payload.issue.number;
       issueTitle = payload.issue.title;
       issueBody = payload.issue.body || '';
-      useKiloAgent = payload.issue.labels?.some((l: { name: string }) => l.name === 'kilo-agent');
     } else if (event === 'issue_comment' && payload.action === 'created') {
       shouldProcess = payload.comment.body.includes('@overviewer');
       issueNumber = payload.issue.number;
@@ -75,10 +73,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Event ignored' });
     }
 
-    if (useKiloAgent && issueNumber) {
+    const llmProvider = process.env.LLM_PROVIDER?.toLowerCase() || 'claude';
+    const useKiloCode = llmProvider !== 'claude';
+
+    if (useKiloCode && issueNumber) {
       const prompt = `Issue #${issueNumber}: ${issueTitle}
 
 ${issueBody}`;
+      
+      console.log(`Using Kilo Code (LLM_PROVIDER=${llmProvider}) for issue #${issueNumber}`);
       
       try {
         runKiloCode(prompt, issueNumber).catch(error => {
@@ -86,13 +89,16 @@ ${issueBody}`;
         });
         
         return NextResponse.json({ 
-          message: 'Kilo Code agent triggered',
-          issueNumber 
+          message: 'Kilo Code execution started',
+          issueNumber,
+          provider: llmProvider
         });
       } catch (error) {
         console.error('Failed to trigger Kilo Code:', error);
       }
     }
+    
+    console.log(`Using Cloud Runner (LLM_PROVIDER=${llmProvider}) for issue #${issueNumber}`);
 
     const job = {
       id: randomUUID(),
