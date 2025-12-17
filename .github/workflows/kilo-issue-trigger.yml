@@ -22,6 +22,12 @@ jobs:
       - name: Install Kilo Code CLI
         run: npm install -g @kilocode/cli
         
+      - name: Authenticate Kilo Code
+        env:
+          KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
+        run: |
+          echo "$KILOCODE_API_KEY" | kilocode auth --token
+        
       - name: Configure Kilo Code (correct format)
         env:
           KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
