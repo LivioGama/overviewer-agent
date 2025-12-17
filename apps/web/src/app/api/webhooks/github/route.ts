@@ -1,7 +1,7 @@
-import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
+import { runKiloCode } from '@/lib/kilo-runner';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from 'redis';
-import { runKiloCode } from '@/lib/kilo-runner';
 
 const getRedisClient = async () => {
   const client = createClient({
@@ -56,17 +56,28 @@ export async function POST(request: NextRequest) {
     let issueNumber: number | undefined;
     let issueTitle = '';
     let issueBody = '';
+    let triggerType = 'issue_opened';
 
     if (event === 'issues' && (payload.action === 'opened' || payload.action === 'labeled')) {
-      shouldProcess = true;
+      const hasLabel = payload.issue.labels?.some((l: { name: string }) => l.name === 'kilo-agent');
+      shouldProcess = hasLabel;
       issueNumber = payload.issue.number;
       issueTitle = payload.issue.title;
       issueBody = payload.issue.body || '';
+      triggerType = 'issue_opened';
     } else if (event === 'issue_comment' && payload.action === 'created') {
       shouldProcess = payload.comment.body.includes('@overviewer');
       issueNumber = payload.issue.number;
       issueTitle = payload.issue.title;
       issueBody = payload.comment.body;
+      triggerType = 'comment';
+    } else if (event === 'pull_request' && (payload.action === 'opened' || payload.action === 'synchronize' || payload.action === 'labeled')) {
+      const hasLabel = payload.pull_request.labels?.some((l: { name: string }) => l.name === 'kilo-agent');
+      shouldProcess = hasLabel;
+      issueNumber = payload.pull_request.number;
+      issueTitle = payload.pull_request.title;
+      issueBody = payload.pull_request.body || '';
+      triggerType = 'pull_request';
     }
 
     if (!shouldProcess) {
@@ -77,11 +88,12 @@ export async function POST(request: NextRequest) {
     const useKiloCode = llmProvider !== 'claude';
 
     if (useKiloCode && issueNumber) {
-      const prompt = `Issue #${issueNumber}: ${issueTitle}
+      const itemType = triggerType === 'pull_request' ? 'PR' : 'Issue';
+      const prompt = `${itemType} #${issueNumber}: ${issueTitle}
 
 ${issueBody}`;
       
-      console.log(`Using Kilo Code (LLM_PROVIDER=${llmProvider}) for issue #${issueNumber}`);
+      console.log(`Using Kilo Code (LLM_PROVIDER=${llmProvider}) for ${itemType.toLowerCase()} #${issueNumber}`);
       
       try {
         runKiloCode(prompt, issueNumber).catch(error => {
@@ -90,7 +102,8 @@ ${issueBody}`;
         
         return NextResponse.json({ 
           message: 'Kilo Code execution started',
-          issueNumber,
+          number: issueNumber,
+          type: triggerType,
           provider: llmProvider
         });
       } catch (error) {
@@ -98,14 +111,15 @@ ${issueBody}`;
       }
     }
     
-    console.log(`Using Cloud Runner (LLM_PROVIDER=${llmProvider}) for issue #${issueNumber}`);
+    const itemType = triggerType === 'pull_request' ? 'PR' : 'issue';
+    console.log(`Using Cloud Runner (LLM_PROVIDER=${llmProvider}) for ${itemType} #${issueNumber}`);
 
     const job = {
       id: randomUUID(),
       installationId: payload.installation?.id || 0,
       repoOwner: payload.repository.owner.login,
       repoName: payload.repository.name,
-      triggerType: event === 'issues' ? 'issue_opened' : 'comment',
+      triggerType,
       triggerPayload: payload,
       taskType: 'bug_fix',
       taskParams: {
