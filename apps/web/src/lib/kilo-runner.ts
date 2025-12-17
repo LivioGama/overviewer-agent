@@ -27,17 +27,59 @@ export const runKiloCode = async (
 
     let output = '';
     let errorOutput = '';
+    let buffer = '';
 
     kiloProcess.stdout.on('data', (data) => {
       const chunk = data.toString();
       output += chunk;
-      process.stdout.write(chunk);
+      buffer += chunk;
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.trim()) {
+          try {
+            const json = JSON.parse(line);
+            
+            if (json.type === 'say' && json.say === 'reasoning' && !json.partial) {
+              console.log(`[Kilo] 💭 ${json.content}`);
+            } else if (json.type === 'say' && json.say === 'checkpoint_saved') {
+              console.log(`[Kilo] 💾 Checkpoint saved: ${json.content?.substring(0, 8)}`);
+            } else if (json.type === 'ask' && json.ask === 'tool' && !json.partial) {
+              const tool = json.metadata?.tool;
+              console.log(`[Kilo] 🔧 Using tool: ${tool}`);
+            } else if (json.type === 'say' && json.say === 'api_req_started') {
+              const provider = json.metadata?.inferenceProvider || 'API';
+              const tokensIn = json.metadata?.tokensIn || 0;
+              const tokensOut = json.metadata?.tokensOut || 0;
+              if (tokensIn > 0) {
+                console.log(`[Kilo] 🤖 ${provider} request (${tokensIn} → ${tokensOut} tokens)`);
+              }
+            } else if (json.event === 'session_synced') {
+              console.log(`[Kilo] ✅ Session synced`);
+            } else if (json.type === 'completion_result') {
+              console.log(`[Kilo] 🎉 Task completed!`);
+            }
+          } catch {
+            process.stdout.write(line + '\n');
+          }
+        }
+      }
     });
 
     kiloProcess.stderr.on('data', (data) => {
       const chunk = data.toString();
       errorOutput += chunk;
-      process.stderr.write(chunk);
+      
+      const lines = chunk.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        if (line.includes('[ERROR]') || line.includes('Error:')) {
+          console.error(`[Kilo] ❌ ${line}`);
+        } else if (line.includes('[WARN]') || line.includes('Warning:')) {
+          console.warn(`[Kilo] ⚠️  ${line}`);
+        }
+      }
     });
 
     kiloProcess.on('close', (code) => {
