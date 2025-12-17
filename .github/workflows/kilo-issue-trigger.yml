@@ -30,13 +30,13 @@ jobs:
             "version": "1.0.0",
             "mode": "code",
             "telemetry": false,
-            "provider": "openai-1",
+            "provider": "kilocode-1",
             "providers": [
               {
-                "id": "openai-1",
-                "provider": "openai",
-                "apiKey": "$OPENAI_API_KEY",
-                "model": "gpt-4.1-mini"
+                "id": "kilocode-1",
+                "provider": "kilocode",
+                "kilocodeToken": "$KILOCODE_API_KEY",
+                "kilocodeModel": "x-ai/grok-code-fast-1"
               }
             ],
             "autoApproval": {
@@ -103,7 +103,7 @@ jobs:
         
       - name: Run Kilo Code with Issue Content
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
         run: |
           echo "Processing issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}" 
           echo "${{ github.event.issue.body }}" | kilocode --auto --yolo --timeout 600
