@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       issueNumber = payload.issue.number;
       issueTitle = payload.issue.title;
       issueBody = payload.issue.body || '';
-      useKiloAgent = payload.issue.labels?.some((l: any) => l.name === 'kilo-agent');
+      useKiloAgent = payload.issue.labels?.some((l: { name: string }) => l.name === 'kilo-agent');
     } else if (event === 'issue_comment' && payload.action === 'created') {
       shouldProcess = payload.comment.body.includes('@overviewer');
       issueNumber = payload.issue.number;
