@@ -27,7 +27,7 @@ jobs:
           KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
         run: |
           mkdir -p ~/.kilocode/cli
-          cat > ~/.kilocode/cli/config.json <<EOF
+          cat > ~/.kilocode/cli/config.json <<'EOF'
           {
             "version": "1.0.0",
             "mode": "code",
@@ -37,7 +37,7 @@ jobs:
               {
                 "id": "kilocode-1",
                 "provider": "kilocode",
-                "kilocodeToken": "$KILOCODE_API_KEY",
+                "kilocodeToken": "TOKEN_PLACEHOLDER",
                 "baseUrl": "https://api.kilocode.ai",
                 "kilocodeModel": "x-ai/grok-code-fast-1"
               }
@@ -96,6 +96,7 @@ jobs:
             "customThemes": {}
           }
           EOF
+          sed -i "s/TOKEN_PLACEHOLDER/$KILOCODE_API_KEY/g" ~/.kilocode/cli/config.json
           
       - name: Verify Kilo Config
         run: |
