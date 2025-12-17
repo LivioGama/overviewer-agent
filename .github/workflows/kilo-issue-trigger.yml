@@ -22,23 +22,31 @@ jobs:
       - name: Install Kilo Code CLI
         run: npm install -g @kilocode/cli
         
-      - name: Configure Kilo Code (CI safe)
+      - name: Configure Kilo Code (force config path)
         run: |
-          mkdir -p ~/.config/kilo
-          cat <<EOF > ~/.config/kilo/config.json
+          mkdir -p ~/.kilo
+          cat <<EOF > ~/.kilo/config.json
           {
             "provider": "openai",
             "model": "gpt-4.1-mini",
             "autoApprove": true
           }
           EOF
+          
+      - name: Verify Kilo Config
+        run: |
+          echo "Config file location:"
+          ls -la ~/.kilo/config.json
+          echo "Config content:"
+          cat ~/.kilo/config.json
         
       - name: Run Kilo Code with Issue Content
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          KILO_CONFIG_PATH: /home/runner/.kilo/config.json
         run: |
           echo "Processing issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}" 
-          echo "${{ github.event.issue.body }}" | kilo --auto --timeout 600
+          echo "${{ github.event.issue.body }}" | kilocode --auto --timeout 600
           
       - name: Comment on Issue
         uses: actions/github-script@v7
