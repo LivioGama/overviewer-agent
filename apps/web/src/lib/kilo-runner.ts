@@ -72,7 +72,7 @@ export const runKiloCode = async (
       const chunk = data.toString();
       errorOutput += chunk;
       
-      const lines = chunk.split('\n').filter(l => l.trim());
+      const lines = chunk.split('\n').filter((l: string) => l.trim());
       for (const line of lines) {
         if (line.includes('[ERROR]') || line.includes('Error:')) {
           console.error(`[Kilo] ❌ ${line}`);
