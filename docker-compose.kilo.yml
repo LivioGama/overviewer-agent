@@ -1,0 +1,29 @@
+services:
+  kilo-webhook:
+    build:
+      context: ./apps/kilo-webhook
+      dockerfile: Dockerfile
+    container_name: kilo-webhook
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./:/app/repo:rw
+      - ~/.gitconfig:/root/.gitconfig:ro
+    environment:
+      - PORT=3001
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      - KILOCODE_API_KEY=${KILOCODE_API_KEY}
+      - KILO_TIMEOUT=600
+      - REPO_PATH=/app/repo
+      - GIT_COMMITTER_NAME=Kilo Agent
+      - GIT_COMMITTER_EMAIL=kilo-agent@overviewer.local
+      - GIT_AUTHOR_NAME=Kilo Agent
+      - GIT_AUTHOR_EMAIL=kilo-agent@overviewer.local
+    networks:
+      - overviewer
+
+networks:
+  overviewer:
+    external: true
+

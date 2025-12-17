@@ -1,0 +1,13 @@
+{
+  "name": "@overviewer-agent/kilo-webhook",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@octokit/webhooks": "^13.3.0",
+    "express": "^4.21.2"
+  }
+}
+
