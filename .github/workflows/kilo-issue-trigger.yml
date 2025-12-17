@@ -22,15 +22,7 @@ jobs:
       - name: Install Kilo Code CLI
         run: npm install -g @kilocode/cli
         
-      - name: Authenticate Kilo Code
-        env:
-          KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
-        run: |
-          echo "$KILOCODE_API_KEY" | kilocode auth --token
-        
-      - name: Configure Kilo Code (correct format)
-        env:
-          KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
+      - name: Configure Kilo Code via env vars
         run: |
           mkdir -p ~/.kilocode/cli
           cat > ~/.kilocode/cli/config.json <<'EOF'
@@ -38,16 +30,7 @@ jobs:
             "version": "1.0.0",
             "mode": "code",
             "telemetry": false,
-            "provider": "kilocode-1",
-            "providers": [
-              {
-                "id": "kilocode-1",
-                "provider": "kilocode",
-                "kilocodeToken": "TOKEN_PLACEHOLDER",
-                "baseUrl": "https://api.kilocode.ai",
-                "kilocodeModel": "x-ai/grok-code-fast-1"
-              }
-            ],
+            "provider": "kilocode",
             "autoApproval": {
               "enabled": true,
               "read": {
@@ -102,7 +85,6 @@ jobs:
             "customThemes": {}
           }
           EOF
-          sed -i "s/TOKEN_PLACEHOLDER/$KILOCODE_API_KEY/g" ~/.kilocode/cli/config.json
           
       - name: Verify Kilo Config
         run: |
@@ -113,7 +95,10 @@ jobs:
         
       - name: Run Kilo Code with Issue Content
         env:
-          KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
+          KILO_PROVIDER: kilocode
+          KILOCODE_TOKEN: ${{ secrets.KILOCODE_API_KEY }}
+          KILOCODE_MODEL: x-ai/grok-code-fast-1
+          KILOCODE_BASE_URL: https://api.kilocode.ai
         run: |
           echo "Processing issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}" 
           echo "${{ github.event.issue.body }}" | kilocode --auto --yolo --timeout 600
