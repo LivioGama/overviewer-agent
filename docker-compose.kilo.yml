@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: kilo-webhook
     restart: unless-stopped
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     volumes:
       - ./:/app/repo:rw
       - ~/.gitconfig:/root/.gitconfig:ro
