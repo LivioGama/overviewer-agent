@@ -18,6 +18,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
       - KILOCODE_API_KEY=${KILOCODE_API_KEY}
+    volumes:
+      - ./:/workspace:rw
     depends_on:
       redis:
         condition: service_healthy

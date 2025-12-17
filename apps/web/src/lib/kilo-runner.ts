@@ -9,9 +9,9 @@ interface KiloRunResult {
 export const runKiloCode = async (
   prompt: string,
   issueNumber: number,
-  repoPath: string = process.cwd()
+  repoPath: string = '/workspace'
 ): Promise<KiloRunResult> => {
-  console.log(`[${new Date().toISOString()}] Running Kilo Code for issue #${issueNumber}`);
+  console.log(`[${new Date().toISOString()}] Running Kilo Code for issue #${issueNumber} in ${repoPath}`);
   
   return new Promise((resolve, reject) => {
     const kiloProcess = spawn('sh', ['-c', `echo "" | kilocode --auto --yolo --json --timeout 600 "${prompt.replace(/"/g, '\\"')}"`], {
