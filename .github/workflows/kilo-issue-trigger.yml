@@ -24,7 +24,7 @@ jobs:
         
       - name: Run Kilo Code with Issue Content
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          KILO_PROVIDER: openai 
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "Processing issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}" 
