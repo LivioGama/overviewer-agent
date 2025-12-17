@@ -28,6 +28,8 @@ export const runKiloCode = async (
     let output = '';
     let errorOutput = '';
     let buffer = '';
+    let currentReasoning = '';
+    let lastReasoningPrint = '';
 
     kiloProcess.stdout.on('data', (data) => {
       const chunk = data.toString();
@@ -42,27 +44,65 @@ export const runKiloCode = async (
           try {
             const json = JSON.parse(line);
             
-            if (json.type === 'say' && json.say === 'reasoning' && !json.partial) {
-              console.log(`[Kilo] 💭 ${json.content}`);
+            if (json.type === 'say' && json.say === 'reasoning') {
+              if (json.partial) {
+                currentReasoning = json.content || '';
+                if (currentReasoning !== lastReasoningPrint) {
+                  process.stdout.write(`\r[Kilo] 💭 ${currentReasoning.substring(0, 100)}${currentReasoning.length > 100 ? '...' : ''}`.padEnd(120));
+                  lastReasoningPrint = currentReasoning;
+                }
+              } else {
+                if (currentReasoning) {
+                  process.stdout.write('\n');
+                }
+                console.log(`[Kilo] 💭 ${json.content}`);
+                currentReasoning = '';
+                lastReasoningPrint = '';
+              }
+            } else if (json.type === 'say' && json.say === 'text') {
+              if (json.partial) {
+                process.stdout.write(json.content || '');
+              } else {
+                console.log(json.content || '');
+              }
             } else if (json.type === 'say' && json.say === 'checkpoint_saved') {
-              console.log(`[Kilo] 💾 Checkpoint saved: ${json.content?.substring(0, 8)}`);
+              if (currentReasoning) process.stdout.write('\n');
+              console.log(`[Kilo] 💾 Checkpoint: ${json.content?.substring(0, 8)}`);
+              currentReasoning = '';
             } else if (json.type === 'ask' && json.ask === 'tool' && !json.partial) {
+              if (currentReasoning) process.stdout.write('\n');
               const tool = json.metadata?.tool;
-              console.log(`[Kilo] 🔧 Using tool: ${tool}`);
+              const params = json.metadata?.params;
+              if (tool === 'write_to_file') {
+                console.log(`[Kilo] 📝 Writing: ${params?.path}`);
+              } else if (tool === 'read_file') {
+                console.log(`[Kilo] 📖 Reading: ${params?.path}`);
+              } else if (tool === 'execute_command') {
+                console.log(`[Kilo] ⚡ Running: ${params?.command}`);
+              } else {
+                console.log(`[Kilo] 🔧 Tool: ${tool}`);
+              }
+              currentReasoning = '';
             } else if (json.type === 'say' && json.say === 'api_req_started') {
+              if (currentReasoning) process.stdout.write('\n');
               const provider = json.metadata?.inferenceProvider || 'API';
               const tokensIn = json.metadata?.tokensIn || 0;
               const tokensOut = json.metadata?.tokensOut || 0;
               if (tokensIn > 0) {
-                console.log(`[Kilo] 🤖 ${provider} request (${tokensIn} → ${tokensOut} tokens)`);
+                console.log(`[Kilo] 🤖 ${provider} (${tokensIn} → ${tokensOut} tokens)`);
               }
+              currentReasoning = '';
             } else if (json.event === 'session_synced') {
-              console.log(`[Kilo] ✅ Session synced`);
+              console.log(`[Kilo] ✅ Synced`);
             } else if (json.type === 'completion_result') {
-              console.log(`[Kilo] 🎉 Task completed!`);
+              if (currentReasoning) process.stdout.write('\n');
+              console.log(`[Kilo] 🎉 Completed!`);
+              currentReasoning = '';
             }
           } catch {
-            process.stdout.write(line + '\n');
+            if (!line.includes('⣿') && !line.includes('█████')) {
+              process.stdout.write(line + '\n');
+            }
           }
         }
       }
