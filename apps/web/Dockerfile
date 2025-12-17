@@ -56,7 +56,7 @@ RUN cd /app/node_modules && \
         fi; \
     done
 
-USER nextjs
+USER root
 
 EXPOSE 3000
 
