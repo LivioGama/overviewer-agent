@@ -6,12 +6,29 @@ interface KiloRunResult {
   code: number;
 }
 
+const getKiloModel = (): string => {
+  const provider = process.env.LLM_PROVIDER?.toLowerCase() || 'claude';
+  const kiloModel = process.env.KILOCODE_MODEL;
+  
+  if (kiloModel) return kiloModel;
+  
+  switch (provider) {
+    case 'claude':
+      return 'anthropic/claude-sonnet-4-20250514';
+    case 'openai':
+      return 'openai/gpt-4o';
+    default:
+      return 'x-ai/grok-code-fast-1';
+  }
+};
+
 export const runKiloCode = async (
   prompt: string,
   issueNumber: number,
   repoPath: string = '/workspace'
 ): Promise<KiloRunResult> => {
-  console.log(`[${new Date().toISOString()}] Running Kilo Code for issue #${issueNumber} in ${repoPath}`);
+  const kiloModel = getKiloModel();
+  console.log(`[${new Date().toISOString()}] Running Kilo Code for issue #${issueNumber} in ${repoPath} with model: ${kiloModel}`);
   
   return new Promise((resolve, reject) => {
     const kiloProcess = spawn('sh', ['-c', `echo "" | kilocode --auto --yolo --json --timeout 600 "${prompt.replace(/"/g, '\\"')}"`], {
@@ -19,7 +36,7 @@ export const runKiloCode = async (
       env: {
         ...process.env,
         KILOCODE_TOKEN: process.env.KILOCODE_API_KEY,
-        KILOCODE_MODEL: 'x-ai/grok-code-fast-1',
+        KILOCODE_MODEL: kiloModel,
         KILOCODE_BASE_URL: 'https://api.kilocode.ai'
       },
       stdio: ['pipe', 'pipe', 'pipe']
