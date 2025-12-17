@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Event ignored' });
     }
 
-    if (useKiloAgent) {
+    if (useKiloAgent && issueNumber) {
       const prompt = `Issue #${issueNumber}: ${issueTitle}
 
 ${issueBody}`;
