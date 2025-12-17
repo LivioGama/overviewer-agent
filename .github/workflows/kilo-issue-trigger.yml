@@ -23,9 +23,11 @@ jobs:
         run: npm install -g @kilocode/cli
         
       - name: Configure Kilo Code (correct format)
+        env:
+          KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
         run: |
           mkdir -p ~/.kilocode/cli
-          cat <<'EOF' > ~/.kilocode/cli/config.json
+          cat > ~/.kilocode/cli/config.json <<EOF
           {
             "version": "1.0.0",
             "mode": "code",
@@ -35,7 +37,7 @@ jobs:
               {
                 "id": "kilocode-1",
                 "provider": "kilocode",
-                "kilocodeToken": "$KILOCODE_API_KEY",
+                "kilocodeToken": "${KILOCODE_API_KEY}",
                 "kilocodeModel": "x-ai/grok-code-fast-1"
               }
             ],
