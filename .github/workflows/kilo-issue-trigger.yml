@@ -22,31 +22,51 @@ jobs:
       - name: Install Kilo Code CLI
         run: npm install -g @kilocode/cli
         
-      - name: Configure Kilo Code (force config path)
+      - name: Configure Kilo Code (correct format)
         run: |
-          mkdir -p ~/.kilo
-          cat <<EOF > ~/.kilo/config.json
+          mkdir -p ~/.kilocode/cli
+          cat <<'EOF' > ~/.kilocode/cli/config.json
           {
-            "provider": "openai",
-            "model": "gpt-4.1-mini",
-            "autoApprove": true
+            "version": "1.0.0",
+            "mode": "code",
+            "telemetry": false,
+            "provider": "openai-1",
+            "providers": [
+              {
+                "id": "openai-1",
+                "provider": "openai",
+                "apiKey": "$OPENAI_API_KEY",
+                "model": "gpt-4o-mini"
+              }
+            ],
+            "autoApproval": {
+              "enabled": true,
+              "read": { "enabled": true, "outside": true },
+              "write": { "enabled": true, "outside": true, "protected": false },
+              "browser": { "enabled": false },
+              "retry": { "enabled": false },
+              "mcp": { "enabled": true },
+              "mode": { "enabled": true },
+              "subtasks": { "enabled": true },
+              "execute": { "enabled": true },
+              "question": { "enabled": false }
+            }
           }
           EOF
           
       - name: Verify Kilo Config
         run: |
-          echo "Config file location:"
-          ls -la ~/.kilo/config.json
+          echo "Config location:"
+          ls -la ~/.kilocode/cli/config.json
           echo "Config content:"
-          cat ~/.kilo/config.json
+          cat ~/.kilocode/cli/config.json
         
       - name: Run Kilo Code with Issue Content
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          KILO_CONFIG_PATH: /home/runner/.kilo/config.json
         run: |
           echo "Processing issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}" 
-          echo "${{ github.event.issue.body }}" | kilocode --auto --timeout 600
+          echo "${{ github.event.issue.body }}" | kilocode --auto --yolo --timeout 600
           
       - name: Comment on Issue
         uses: actions/github-script@v7
