@@ -41,16 +41,56 @@ jobs:
             ],
             "autoApproval": {
               "enabled": true,
-              "read": { "enabled": true, "outside": true },
-              "write": { "enabled": true, "outside": true, "protected": false },
-              "browser": { "enabled": false },
-              "retry": { "enabled": false },
-              "mcp": { "enabled": true },
-              "mode": { "enabled": true },
-              "subtasks": { "enabled": true },
-              "execute": { "enabled": true },
-              "question": { "enabled": false }
-            }
+              "read": {
+                "enabled": true,
+                "outside": true
+              },
+              "write": {
+                "enabled": true,
+                "outside": true,
+                "protected": false
+              },
+              "browser": {
+                "enabled": false
+              },
+              "retry": {
+                "enabled": false,
+                "delay": 10
+              },
+              "mcp": {
+                "enabled": true
+              },
+              "mode": {
+                "enabled": true
+              },
+              "subtasks": {
+                "enabled": true
+              },
+              "execute": {
+                "enabled": true,
+                "allowed": [
+                  "ls",
+                  "cat",
+                  "echo",
+                  "pwd"
+                ],
+                "denied": [
+                  "rm -rf",
+                  "sudo rm",
+                  "mkfs",
+                  "dd if="
+                ]
+              },
+              "question": {
+                "enabled": false,
+                "timeout": 60
+              },
+              "todo": {
+                "enabled": true
+              }
+            },
+            "theme": "dark",
+            "customThemes": {}
           }
           EOF
           
