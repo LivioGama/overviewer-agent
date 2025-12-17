@@ -22,7 +22,7 @@ jobs:
       - name: Install Kilo Code CLI
         run: npm install -g @kilocode/cli
         
-      - name: Configure Kilo Code via env vars
+      - name: Configure Kilo Code with full config
         run: |
           mkdir -p ~/.kilocode/cli
           cat > ~/.kilocode/cli/config.json <<'EOF'
@@ -30,7 +30,14 @@ jobs:
             "version": "1.0.0",
             "mode": "code",
             "telemetry": false,
-            "provider": "kilocode",
+            "provider": "default",
+            "providers": [
+              {
+                "id": "default",
+                "provider": "kilocode",
+                "kilocodeModel": "x-ai/grok-code-fast-1"
+              }
+            ],
             "autoApproval": {
               "enabled": true,
               "read": {
@@ -95,16 +102,10 @@ jobs:
         
       - name: Run Kilo Code with Issue Content
         env:
-          KILO_PROVIDER: kilocode
           KILOCODE_TOKEN: ${{ secrets.KILOCODE_API_KEY }}
-          KILOCODE_MODEL: x-ai/grok-code-fast-1
-          KILOCODE_BASE_URL: https://api.kilocode.ai
         run: |
           echo "Processing issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}"
-          echo "Debug: KILO_PROVIDER=$KILO_PROVIDER"
           echo "Debug: KILOCODE_TOKEN length=${#KILOCODE_TOKEN}"
-          echo "Debug: KILOCODE_MODEL=$KILOCODE_MODEL"
-          echo "Debug: KILOCODE_BASE_URL=$KILOCODE_BASE_URL"
           kilocode --auto --yolo --timeout 600 "Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
 
           ${{ github.event.issue.body }}" 2>&1 || echo "Kilocode exit code: $?"
