@@ -45,9 +45,20 @@ export async function POST(request: NextRequest) {
     const payload = JSON.parse(body);
     const event = request.headers.get('x-github-event');
     
+    console.log(`[Webhook] Received ${event} event from ${payload.repository?.full_name || 'unknown'}`);
+    console.log(`[Webhook] Installation ID: ${payload.installation?.id || 'MISSING'}`);
+    
     if (!event || !payload.repository) {
       return NextResponse.json(
         { error: 'Invalid webhook payload' },
+        { status: 400 }
+      );
+    }
+    
+    if (!payload.installation?.id) {
+      console.error('[Webhook] Missing installation ID in payload - webhook not configured for GitHub App');
+      return NextResponse.json(
+        { error: 'Missing installation ID - ensure webhook is configured via GitHub App' },
         { status: 400 }
       );
     }
