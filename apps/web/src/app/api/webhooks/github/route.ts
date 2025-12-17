@@ -1,6 +1,7 @@
 import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from 'redis';
+import { runKiloCode } from '@/lib/kilo-runner';
 
 const getRedisClient = async () => {
   const client = createClient({
@@ -52,15 +53,17 @@ export async function POST(request: NextRequest) {
     }
 
     let shouldProcess = false;
+    let useKiloAgent = false;
     let issueNumber: number | undefined;
     let issueTitle = '';
     let issueBody = '';
 
-    if (event === 'issues' && payload.action === 'opened') {
+    if (event === 'issues' && (payload.action === 'opened' || payload.action === 'labeled')) {
       shouldProcess = true;
       issueNumber = payload.issue.number;
       issueTitle = payload.issue.title;
       issueBody = payload.issue.body || '';
+      useKiloAgent = payload.issue.labels?.some((l: any) => l.name === 'kilo-agent');
     } else if (event === 'issue_comment' && payload.action === 'created') {
       shouldProcess = payload.comment.body.includes('@overviewer');
       issueNumber = payload.issue.number;
@@ -70,6 +73,25 @@ export async function POST(request: NextRequest) {
 
     if (!shouldProcess) {
       return NextResponse.json({ message: 'Event ignored' });
+    }
+
+    if (useKiloAgent) {
+      const prompt = `Issue #${issueNumber}: ${issueTitle}
+
+${issueBody}`;
+      
+      try {
+        runKiloCode(prompt, issueNumber).catch(error => {
+          console.error(`Kilo Code error for issue #${issueNumber}:`, error);
+        });
+        
+        return NextResponse.json({ 
+          message: 'Kilo Code agent triggered',
+          issueNumber 
+        });
+      } catch (error) {
+        console.error('Failed to trigger Kilo Code:', error);
+      }
     }
 
     const job = {

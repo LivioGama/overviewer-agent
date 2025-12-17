@@ -24,12 +24,19 @@ RUN bun run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+RUN apk add --no-cache git
+
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NODE_PATH=/app/node_modules
 
+RUN npm install -g @kilocode/cli
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+RUN mkdir -p /home/nextjs/.kilocode/cli
+COPY --chown=nextjs:nodejs apps/web/kilo-config.json /home/nextjs/.kilocode/cli/config.json
 
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
