@@ -101,9 +101,13 @@ jobs:
           KILOCODE_BASE_URL: https://api.kilocode.ai
         run: |
           echo "Processing issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}"
+          echo "Debug: KILO_PROVIDER=$KILO_PROVIDER"
+          echo "Debug: KILOCODE_TOKEN length=${#KILOCODE_TOKEN}"
+          echo "Debug: KILOCODE_MODEL=$KILOCODE_MODEL"
+          echo "Debug: KILOCODE_BASE_URL=$KILOCODE_BASE_URL"
           kilocode --auto --yolo --timeout 600 "Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
 
-          ${{ github.event.issue.body }}"
+          ${{ github.event.issue.body }}" 2>&1 || echo "Kilocode exit code: $?"
           
       - name: Comment on Issue
         uses: actions/github-script@v7
