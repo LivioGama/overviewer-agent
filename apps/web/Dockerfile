@@ -35,7 +35,7 @@ RUN npm install -g @kilocode/cli
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-RUN mkdir -p /home/nextjs/.kilocode/cli
+RUN mkdir -p /home/nextjs/.kilocode/cli/logs && chown -R nextjs:nodejs /home/nextjs/.kilocode
 COPY --chown=nextjs:nodejs apps/web/kilo-config.json /home/nextjs/.kilocode/cli/config.json
 
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
