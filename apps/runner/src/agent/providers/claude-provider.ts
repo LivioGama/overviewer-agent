@@ -79,12 +79,17 @@ export class ClaudeProvider implements LLMProvider {
         }));
 
         // Call Claude bridge
+        const enhancedSystemPrompt = `${systemPrompt}
+
+CRITICAL: You MUST respond with ONLY valid JSON. No markdown, no explanations outside JSON, no code blocks.
+Your entire response must be parseable as JSON following the exact schema provided above.`;
+
         const response = await axios.post(`${this.bridgeUrl}/v1/messages`, {
           model: this.model,
           max_tokens: 4096,
           temperature: 0.1,
           messages: [
-            { role: 'system', content: systemPrompt },
+            { role: 'system', content: enhancedSystemPrompt },
             ...messages
           ]
         }, {
@@ -134,20 +139,33 @@ export class ClaudeProvider implements LLMProvider {
 
   private parseThought(content: string): AgentThought {
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return {
-          reasoning: content,
-          finished: true,
-          finalAnswer: "Unable to parse response",
-        };
+      let jsonStr = content.trim();
+      
+      const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1];
+      } else {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0];
+        }
       }
-      return JSON.parse(jsonMatch[0]);
+      
+      const parsed = JSON.parse(jsonStr);
+      
+      if (!parsed.reasoning) {
+        parsed.reasoning = "No reasoning provided";
+      }
+      
+      return parsed;
     } catch (error) {
+      console.error("Failed to parse Claude response:", error);
+      console.error("Response content:", content);
+      
       return {
-        reasoning: content,
+        reasoning: "Failed to parse LLM response - response was not in valid JSON format",
         finished: true,
-        finalAnswer: content,
+        finalAnswer: "Unable to parse response - please check logs for details",
       };
     }
   }

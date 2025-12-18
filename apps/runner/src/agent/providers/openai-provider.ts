@@ -173,20 +173,33 @@ export class OpenAIProvider implements LLMProvider {
 
   private parseThought(content: string): AgentThought {
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return {
-          reasoning: content,
-          finished: true,
-          finalAnswer: "Unable to parse response",
-        };
+      let jsonStr = content.trim();
+      
+      const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1];
+      } else {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0];
+        }
       }
-      return JSON.parse(jsonMatch[0]);
+      
+      const parsed = JSON.parse(jsonStr);
+      
+      if (!parsed.reasoning) {
+        parsed.reasoning = "No reasoning provided";
+      }
+      
+      return parsed;
     } catch (error) {
+      console.error("Failed to parse OpenAI response:", error);
+      console.error("Response content:", content);
+      
       return {
-        reasoning: content,
+        reasoning: "Failed to parse LLM response - response was not in valid JSON format",
         finished: true,
-        finalAnswer: content,
+        finalAnswer: "Unable to parse response - please check logs for details",
       };
     }
   }
