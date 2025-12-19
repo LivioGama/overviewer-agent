@@ -137,7 +137,7 @@ automation:
 
   tasks:
     fix:
-      model: "claude-haiku-4-5-20251001"
+      model: "glm-4.6"
       max_tokens: 3000
       timeout: 300
       auto_fix: true
